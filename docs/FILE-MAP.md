@@ -80,3 +80,21 @@
 ## 管理入口
 
 README.md、AGENTS.md、HANDOFF.md、PROJECT.json、CLAUDE.md、GEMINI.md、.github/copilot-instructions.md、docs/VERIFICATION.md。
+
+## 檔內結構（行號索引，2026-10-18 Claude 依基準 `f89d6fb` 整理）
+
+只讀需要的段落；標 ⚠️ 的是超長單行資料，不要整行載入。
+
+| 約略行號 | 內容 |
+| ---: | --- |
+| 9–350 | `<style>` |
+| 353–394 | HTML：選單頁 `#menuPage`、播放頁 `#playerPage`、燈板 canvas |
+| 395–1373 | 主程式 `<script>` |
+| 397–406 | 調色盤 `P`（單字元色碼） |
+| 408–531 | `THEMES`：8 主題 × 8 幕（標題、文字、語音檔號、配樂代號） |
+| 532–586 | 燈板繪圖工具與精靈圖 `SPR` |
+| 587–1097 | `SCENE_GEN`：每個主題每一幕的 16×16 燈板動畫 |
+| 1098–1181 | 合成環境音效 `playThemeSfx()` |
+| 1182–1217 | 音訊物件 `audioTTS`、`audioBGM` 與選單卡片 |
+| 1218–1351 | 播放控制：`preloadAndPlay()`、`loadScene()`（語音路徑在這裡）、播放／暫停／上下幕 |
+| 1352–1373 | 燈板動畫迴圈 |
