@@ -1,0 +1,2351 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>07. 舞龍舞獅感應遊戲 — 雙螢幕分離式展演系統</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- MotionKit：鏡頭體感偵測共用模組（MediaPipe Pose 由模組自動載入；請與本檔放在同一資料夾） -->
+    <script src="motion-kit.js"></script>
+    <!-- Google Fonts: Noto Sans TC & Noto Serif TC -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=Noto+Serif+TC:wght@700;900&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --lacquer-dark: #3b0407;
+            --lacquer-red: #6e0a10;
+            --festive-red: #b5121b;
+            --parchment-light: #fff9eb;
+            --parchment-mid: #f7e6c0;
+            --parchment-deep: #ebd098;
+            --gold-bright: #ffd700;
+            --gold-bronze: #c68b2c;
+            --ink-brown: #4a1208;
+        }
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0d0214;
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+
+        .serif-title {
+            font-family: 'Noto Serif TC', serif;
+        }
+
+        /* =====================================================================
+           LEFT SCREEN: 100% PURE 3D MAIN STAGE (ZERO UI OVERLAY)
+           ===================================================================== */
+        #left-stage-pane {
+            position: relative;
+            height: 100%;
+            background: #0d0214;
+            overflow: hidden;
+            transition: width 0.25s ease;
+        }
+
+        #canvas-container {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+
+        /* Nearly invisible auto-fading corner button on Pure Left Stage */
+        .pure-stage-corner-trigger {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 30;
+            opacity: 0.05;
+            transition: opacity 0.3s ease, transform 0.2s ease;
+        }
+        .pure-stage-corner-trigger:hover {
+            opacity: 1 !important;
+            transform: scale(1.03);
+        }
+
+        /* =====================================================================
+           RIGHT SCREEN: IMPERIAL PARCHMENT SCROLL & GOLD-LACQUER INFO DASHBOARD
+           ===================================================================== */
+        #right-info-pane {
+            position: relative;
+            height: 100%;
+            background:
+                radial-gradient(circle at 85% 12%, rgba(255, 215, 0, 0.16), transparent 45%),
+                radial-gradient(circle at 15% 88%, rgba(217, 28, 28, 0.22), transparent 50%),
+                linear-gradient(160deg, #470509 0%, #6b0b11 45%, #3d0407 100%);
+            border-left: 5px solid #d49b27;
+            box-shadow: -12px 0 35px rgba(0, 0, 0, 0.75);
+            overflow-y: auto;
+            overflow-x: hidden;
+            color: var(--ink-brown);
+        }
+
+        /* Custom Scrollbar for Right Info Dashboard */
+        #right-info-pane::-webkit-scrollbar {
+            width: 6px;
+        }
+        #right-info-pane::-webkit-scrollbar-track {
+            background: #3b0407;
+        }
+        #right-info-pane::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #ffd166, #b87b19);
+            border-radius: 999px;
+        }
+
+        /* Rotating Auspicious Watermark in Right Screen Background */
+        @keyframes slowRotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .auspicious-watermark {
+            position: absolute;
+            width: 460px;
+            height: 460px;
+            right: -130px;
+            top: 120px;
+            opacity: 0.06;
+            pointer-events: none;
+            animation: slowRotate 90s linear infinite;
+            z-index: 0;
+        }
+
+        /* Imperial Parchment Scroll Card (Matches Poster Bottom Scroll Aesthetic) */
+        .parchment-scroll-card {
+            background:
+                radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.75), transparent 70%),
+                linear-gradient(180deg, #fff9ea 0%, #f7e6c2 65%, #ecd29c 100%);
+            border: 2.5px solid #c98a24;
+            box-shadow:
+                0 8px 22px rgba(28, 2, 2, 0.48),
+                inset 0 0 0 3px rgba(158, 27, 27, 0.18),
+                inset 0 2px 12px rgba(255, 255, 255, 0.8);
+            position: relative;
+        }
+
+        .parchment-scroll-card::after {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border: 1px dashed rgba(153, 15, 15, 0.28);
+            border-radius: inherit;
+            pointer-events: none;
+        }
+
+        /* Dark Crimson Lacquer Telemetry Sub-Card inside Parchment */
+        .crimson-telemetry-box {
+            background: linear-gradient(145deg, #6b080d 0%, #420306 100%);
+            border: 1.5px solid #f0bc42;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.55), 0 4px 10px rgba(0, 0, 0, 0.25);
+            color: #fff7df;
+        }
+
+        /* Poster Top Banner Header Inside Right Info Screen */
+        .imperial-header-banner {
+            background: linear-gradient(180deg, #fff6d9 0%, #f5d388 55%, #dfac47 100%);
+            border: 3px solid #ffd97d;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55), inset 0 0 12px rgba(255, 255, 255, 0.85);
+            position: relative;
+        }
+
+        .badge-07 {
+            background: radial-gradient(circle at 30% 30%, #e02828, #730000);
+            border: 2.5px solid #ffd166;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45), inset 0 2px 4px rgba(255, 255, 255, 0.35);
+        }
+
+        /* Festive Buttons */
+        .btn-vermilion {
+            background: linear-gradient(180deg, #d91c1c 0%, #870909 100%);
+            border: 1.5px solid #ffd166;
+            color: #fff8e7;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.35);
+            transition: all 0.15s ease;
+        }
+        .btn-vermilion:hover {
+            transform: translateY(-1px);
+            background: linear-gradient(180deg, #f22929 0%, #a10d0d 100%);
+            box-shadow: 0 5px 14px rgba(217, 28, 28, 0.45);
+        }
+        .btn-vermilion:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        .btn-imperial-gold {
+            background: linear-gradient(180deg, #ffe373 0%, #d99316 100%);
+            border: 1.5px solid #fff5b8;
+            color: #590707;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+            box-shadow: 0 3px 12px rgba(217, 147, 22, 0.45);
+            transition: all 0.15s ease;
+        }
+        .btn-imperial-gold:hover {
+            transform: translateY(-1px);
+            background: linear-gradient(180deg, #ffea8a 0%, #e8a325 100%);
+            box-shadow: 0 5px 16px rgba(255, 215, 0, 0.7);
+        }
+        .btn-imperial-gold:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        /* Camera Director Active Pill */
+        .cam-btn-active {
+            background: linear-gradient(180deg, #ffe066 0%, #d48b11 100%) !important;
+            color: #540606 !important;
+            border-color: #fff6c2 !important;
+            box-shadow: 0 0 12px rgba(255, 215, 0, 0.8) !important;
+            font-weight: 900 !important;
+        }
+
+        /* Shimmering Harmony Progress Bar */
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .harmony-bar-fill {
+            background: linear-gradient(90deg, #d91c1c, #ff8800, #ffd700, #fff5a8, #ffd700, #ff6200);
+            background-size: 200% 100%;
+            animation: shimmer 2.2s linear infinite;
+            transition: width 0.18s ease-out;
+        }
+
+        /* Interactive Tanggu Drum Pad on Right Screen */
+        .tanggu-drum-btn {
+            background: radial-gradient(circle at 35% 32%, #fffdf5 0%, #f5deb3 58%, #cfa055 82%, #8f0d0d 85%, #5c0606 100%);
+            border: 4px solid #ffd700;
+            box-shadow: 0 6px 18px rgba(74, 18, 8, 0.45), inset 0 0 15px rgba(139, 0, 0, 0.28);
+            transition: transform 0.07s cubic-bezier(0.2, 0.9, 0.3, 1.3), box-shadow 0.1s ease;
+        }
+        .tanggu-drum-btn:active, .tanggu-drum-btn.drum-hit {
+            transform: scale(0.92);
+            box-shadow: 0 0 28px rgba(255, 215, 0, 0.95), inset 0 0 22px rgba(255, 69, 0, 0.55);
+        }
+
+        /* Wave Touch Pad inside Right Screen */
+        .wave-touch-pad {
+            background: radial-gradient(circle at 50% 50%, #2e071d 0%, #14020c 100%);
+            border: 2px solid #d49b27;
+            box-shadow: inset 0 0 20px rgba(255, 183, 0, 0.22);
+            touch-action: none;
+        }
+
+        /* Toast notification inside Right Info Screen ONLY */
+        @keyframes rightToastPop {
+            0% { opacity: 0; transform: translateY(8px) scale(0.92); }
+            15% { opacity: 1; transform: translateY(0) scale(1.02); }
+            85% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-6px) scale(0.95); }
+        }
+        .right-screen-toast {
+            animation: rightToastPop 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+    </style>
+</head>
+<body class="w-full h-full overflow-hidden select-none">
+
+    <!-- =======================================================================
+         MAIN DUAL-SCREEN FLEX WORKSPACE
+         - Left Screen: 100% Pure 3D Stage (No UI Clutter!)
+         - Right Screen: Imperial Parchment Scroll Info & Motion Dashboard
+         ======================================================================= -->
+    <div id="dual-workspace" class="w-full h-full flex flex-col lg:flex-row overflow-hidden">
+
+        <!-- ===================================================================
+             LEFT SCREEN: 100% PURE 3D MAIN STAGE (純淨無字 3D 舞龍舞獅主舞台)
+             =================================================================== -->
+        <section id="left-stage-pane" class="w-full lg:w-[56%] h-[44%] lg:h-full relative shrink-0">
+            <!-- 3D WebGL Canvas -->
+            <div id="canvas-container"></div>
+
+            <!-- Subtle Auto-Fading Corner Button (Only visible when hovering top-left corner in pure stage mode) -->
+            <div class="pure-stage-corner-trigger flex items-center gap-1.5">
+                <button id="btn-stage-restore-split" class="bg-black/80 hover:bg-[#8a1111] text-[#ffd166] border border-[#ffd166]/60 rounded-full px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 shadow-lg backdrop-blur-md">
+                    <i class="fas fa-columns"></i>
+                    <span>顯示右方資訊螢幕 (雙螢幕並排)</span>
+                </button>
+                <button id="btn-stage-pop-right" class="bg-black/80 hover:bg-[#8a1111] text-amber-200 border border-amber-400/50 rounded-full px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 shadow-lg backdrop-blur-md">
+                    <i class="fas fa-external-link-alt"></i>
+                    <span>彈出右資訊視窗</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             RIGHT SCREEN: FESTIVE SCROLL INFORMATION & MOTION CONTROL DASHBOARD
+             (右螢幕：宮廷宣紙卷軸 × 朱紅鎏金數位資訊與體感中控台)
+             =================================================================== -->
+        <aside id="right-info-pane" class="w-full lg:w-[44%] h-[56%] lg:h-full flex flex-col justify-between p-2.5 sm:p-3.5 gap-2.5 relative z-10">
+
+            <!-- Decorative Rotating Auspicious Floral/Bagua SVG Watermark -->
+            <svg class="auspicious-watermark" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="100" cy="100" r="92" stroke="#FFD700" stroke-width="3" stroke-dasharray="8 6"/>
+                <circle cx="100" cy="100" r="74" stroke="#FFD700" stroke-width="2"/>
+                <polygon points="100,12 124,72 188,72 136,110 156,172 100,134 44,172 64,110 12,72 76,72" stroke="#FFD700" stroke-width="2" fill="none"/>
+                <circle cx="100" cy="100" r="36" stroke="#FFD700" stroke-width="4"/>
+            </svg>
+
+            <!-- 1. TOP IMPERIAL BANNER & DUAL-SCREEN WINDOW CONTROLLER -->
+            <div class="relative z-10 flex flex-col gap-2">
+                <!-- Top Mode Switcher Bar & Live Sync Status -->
+                <div class="flex flex-wrap items-center justify-between gap-1.5 bg-black/45 border border-yellow-500/40 rounded-2xl px-3 py-1.5 backdrop-blur-sm">
+                    <div class="flex items-center gap-2">
+                        <span id="sync-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399] animate-pulse"></span>
+                        <span id="sync-status-text" class="text-[11px] sm:text-xs font-black text-amber-200 tracking-wide">
+                            雙螢幕即時連動中 (右控左演)
+                        </span>
+                    </div>
+
+                    <!-- View Layout Mode Buttons -->
+                    <div class="flex items-center gap-1">
+                        <button data-layout="split" class="layout-mode-btn px-2 py-1 rounded-lg text-[11px] font-black bg-[#ffd166] text-[#5c0808] transition">
+                            雙螢幕並排
+                        </button>
+                        <button data-layout="left_only" class="layout-mode-btn px-2 py-1 rounded-lg text-[11px] font-bold bg-white/10 text-amber-200 hover:bg-white/20 transition" title="將此視窗設為100%純淨左主舞台">
+                            純左舞台
+                        </button>
+                        <button data-layout="right_only" class="layout-mode-btn px-2 py-1 rounded-lg text-[11px] font-bold bg-white/10 text-amber-200 hover:bg-white/20 transition" title="將此視窗設為100%右方資訊中控螢幕">
+                            純右資訊幕
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Poster Title Scroll Banner -->
+                <div class="imperial-header-banner rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="badge-07 w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0">
+                            <span class="text-white font-black text-lg sm:text-xl tracking-tighter">07</span>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#8a1111] text-[#ffd166] tracking-widest">
+                                    右螢幕・資訊與體感中控
+                                </span>
+                                <span class="text-[10px] font-bold text-[#7d2908] hidden sm:inline">❖ 揮動互動・喜氣登場 ❖</span>
+                            </div>
+                            <h1 class="serif-title text-lg sm:text-xl font-black text-[#730808] tracking-wide truncate mt-0.5">
+                                7. 舞龍舞獅感應遊戲
+                            </h1>
+                        </div>
+                    </div>
+
+                    <!-- Pop-out Separate Window Action & Audio Mute -->
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button id="btn-popout-dual" class="btn-vermilion rounded-xl px-2.5 py-1.5 text-xs font-black flex items-center gap-1.5 shadow" title="彈出獨立右螢幕視窗，原視窗自動變為100%純淨左主舞台">
+                            <i class="fas fa-external-link-alt text-[#ffd166]"></i>
+                            <span>彈出雙視窗</span>
+                        </button>
+                        <button id="btn-audio-toggle" class="w-9 h-9 rounded-xl bg-[#7a0c0c] border border-[#ffd166] text-[#ffd166] flex items-center justify-center hover:scale-105 transition" title="鑼鼓音效開關">
+                            <i id="icon-audio" class="fas fa-volume-up text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. PARCHMENT CARD A: FESTIVE TELEMETRY & HARMONY METER (喜氣數據與協調度儀表板) -->
+            <div class="parchment-scroll-card rounded-2xl p-3 relative z-10">
+                <!-- Live Callout Toast Banner (Replaces floating text on Left Stage so Left Stage stays 100% pure!) -->
+                <div class="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-[#d49b27]/40">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-6 h-6 rounded-full bg-[#8f0d0d] text-[#ffd166] flex items-center justify-center text-xs font-black">瑞</span>
+                        <span class="serif-title font-black text-sm text-[#690b0b]">即時展演數據監測</span>
+                    </div>
+                    <div id="right-live-toast" class="text-xs font-black text-[#990f0f] bg-[#ffd166]/45 border border-[#c98a24] px-2.5 py-0.5 rounded-full truncate">
+                        🎊 揮動雙手或踏步，帶動左螢幕舞龍舞獅！
+                    </div>
+                </div>
+
+                <!-- 3 Primary Telemetry Counters -->
+                <div class="grid grid-cols-3 gap-2 mb-2.5">
+                    <div class="crimson-telemetry-box rounded-xl p-2 text-center">
+                        <div class="text-[10px] text-amber-200/80 font-bold">賀歲喜氣總分</div>
+                        <div id="ui-score" class="serif-title text-lg sm:text-2xl font-black text-[#ffd700] tracking-tight leading-tight">1,280</div>
+                    </div>
+                    <div class="crimson-telemetry-box rounded-xl p-2 text-center">
+                        <div class="text-[10px] text-amber-200/80 font-bold">動作協調連擊</div>
+                        <div id="ui-combo" class="serif-title text-lg sm:text-2xl font-black text-rose-300 leading-tight">x1 喜氣</div>
+                    </div>
+                    <div class="crimson-telemetry-box rounded-xl p-2 text-center">
+                        <div class="text-[10px] text-amber-200/80 font-bold">左舞台瑞兆評級</div>
+                        <div id="ui-rank" class="serif-title text-sm sm:text-base font-black text-emerald-300 leading-tight mt-0.5">祥瑞初現</div>
+                    </div>
+                </div>
+
+                <!-- Harmony & Spectacle Progress Bar (動作越協調，畫面越壯觀) -->
+                <div class="bg-[#fffdf7] rounded-xl p-2 border border-[#d9a74a]">
+                    <div class="flex items-center justify-between text-xs font-black mb-1">
+                        <span class="text-[#730808] flex items-center gap-1">
+                            <i class="fas fa-fire text-orange-600"></i> 團隊動作協調度（越協調、左舞台煙火越壯觀）
+                        </span>
+                        <span id="ui-harmony-pct" class="text-sm font-black text-[#b5121b]">45%</span>
+                    </div>
+                    <div class="w-full h-3 bg-[#360505] rounded-full overflow-hidden p-0.5 border border-[#c98a24]">
+                        <div id="ui-harmony-bar" class="harmony-bar-fill h-full rounded-full" style="width: 45%;"></div>
+                    </div>
+                    <div id="ui-harmony-hint" class="text-[11px] font-bold text-[#7d3c0a] mt-1">
+                        💡 同時「揮動雙手」＋「踏步跑動」可衝上 80% 觸發左舞台皇家漫天煙火！
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. PARCHMENT CARD B: 3-CHANNEL MOTION RADAR & WEBCAM SENSOR (體感偵測雷達與視訊感應) -->
+            <div class="parchment-scroll-card rounded-2xl p-3 relative z-10">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-6 h-6 rounded-full bg-[#8f0d0d] text-[#ffd166] flex items-center justify-center text-xs">
+                            <i class="fas fa-satellite-dish"></i>
+                        </span>
+                        <span class="serif-title font-black text-sm text-[#690b0b]">三軸體感偵測儀（雙手揮動 & 跑動步頻）</span>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <span id="ui-sensor-mode-badge" class="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#730808] text-[#ffd166]">
+                            觸控 / 鍵盤體感
+                        </span>
+                        <button id="btn-webcam-recal" title="重新執行自動偵測與校正" class="hidden btn-imperial-gold rounded-lg px-2.5 py-1 text-xs font-black items-center gap-1">
+                            <i class="fas fa-crosshairs"></i>
+                            <span>重新校正</span>
+                        </button>
+                        <button id="btn-webcam-toggle" class="btn-imperial-gold rounded-lg px-2.5 py-1 text-xs font-black flex items-center gap-1">
+                            <i class="fas fa-camera"></i>
+                            <span id="ui-webcam-btn-text">開啟視訊體感</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3-Channel Live Motion Bars + Optional Webcam PiP -->
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+                    <div id="motion-bars-col" class="sm:col-span-12 space-y-1.5 bg-[#fffdf7] p-2.5 rounded-xl border border-[#d9a74a]">
+                        <!-- Left Hand Red-Gold Baton Energy -->
+                        <div>
+                            <div class="flex justify-between text-[11px] font-bold text-[#690b0b] mb-0.5">
+                                <span>🔴 左手紅金棒揮動動能 (牽引祥龍左旋)</span>
+                                <span id="ui-left-wave-text" class="font-black text-[#b5121b]">32%</span>
+                            </div>
+                            <div class="w-full h-2 bg-stone-200 rounded-full overflow-hidden">
+                                <div id="ui-left-wave-bar" class="h-full bg-gradient-to-r from-red-600 to-amber-400 transition-all duration-100" style="width: 32%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Right Hand Cyan-Blue Baton Energy -->
+                        <div>
+                            <div class="flex justify-between text-[11px] font-bold text-[#690b0b] mb-0.5">
+                                <span>🔵 右手藍青棒揮動動能 (牽引祥龍右盤)</span>
+                                <span id="ui-right-wave-text" class="font-black text-sky-700">32%</span>
+                            </div>
+                            <div class="w-full h-2 bg-stone-200 rounded-full overflow-hidden">
+                                <div id="ui-right-wave-bar" class="h-full bg-gradient-to-r from-sky-600 to-cyan-300 transition-all duration-100" style="width: 32%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Running / Stepping Cadence -->
+                        <div>
+                            <div class="flex justify-between text-[11px] font-bold text-[#690b0b] mb-0.5">
+                                <span>🏃 跑動踏步頻率 (帶動瑞獅躍上梅花樁)</span>
+                                <span id="ui-run-cadence-text" class="font-black text-emerald-700">待機中 (樁位 #4/7)</span>
+                            </div>
+                            <div class="w-full h-2 bg-stone-200 rounded-full overflow-hidden">
+                                <div id="ui-run-cadence-bar" class="h-full bg-gradient-to-r from-emerald-600 to-yellow-400 transition-all duration-100" style="width: 15%;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Webcam Feed Box (Appears inside Right Info Screen when activated) -->
+                    <div id="webcam-box" class="hidden sm:col-span-5 relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-[#8f0d0d] bg-black shadow-md">
+                        <video id="webcam-video" autoplay playsinline muted class="hidden"></video>
+                        <canvas id="webcam-canvas" class="w-full h-full object-cover"></canvas>
+                        <div class="absolute bottom-0 inset-x-0 bg-black/75 text-[10px] text-center text-[#ffd166] font-bold py-0.5">
+                            雙手揮動・原地踏步・跳躍・拍手・雙手高舉
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. PARCHMENT CARD C: INTERACTIVE WAVE PAD, LION DRUM & STAGE CAMERA DIRECTOR -->
+            <div class="parchment-scroll-card rounded-2xl p-3 relative z-10 flex flex-col gap-2.5">
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-stretch">
+
+                    <!-- Left (7 cols): Interactive Dual-Baton Wave Pad -->
+                    <div class="sm:col-span-7 flex flex-col">
+                        <div class="flex items-center justify-between text-xs font-black text-[#690b0b] mb-1">
+                            <span>👋 雙色螢光棒揮動感應板 (滑動即時控龍)</span>
+                            <span class="text-[10px] text-[#990f0f]">支援滑鼠 / 觸控畫8字</span>
+                        </div>
+                        <div id="right-wave-pad" class="wave-touch-pad relative w-full h-28 sm:h-32 rounded-xl overflow-hidden cursor-crosshair flex-1">
+                            <canvas id="right-pad-canvas" class="w-full h-full block"></canvas>
+                            <div class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center opacity-35">
+                                <span class="serif-title text-sm sm:text-base font-black text-amber-200">在此滑動揮舞紅藍光棒</span>
+                                <span class="text-[10px] text-amber-100">左螢幕 3D 金龍與光帶將同步飛舞</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right (5 cols): Tactile Tanggu Lion Drum & Step Trigger -->
+                    <div class="sm:col-span-5 flex flex-col items-center justify-between bg-[#fffdf7] rounded-xl p-2 border border-[#d9a74a]">
+                        <div class="text-xs font-black text-[#690b0b] text-center">
+                            🥁 瑞獅戰鼓 / 踏步跑動鍵
+                        </div>
+                        <button id="btn-tanggu-drum" class="tanggu-drum-btn w-20 h-20 sm:w-24 sm:h-24 rounded-full flex flex-col items-center justify-center cursor-pointer my-1">
+                            <span class="serif-title text-xl sm:text-2xl font-black text-[#7a0808]">咚！跳樁</span>
+                            <span class="text-[9px] font-black text-[#5c0606]">連擊或空白鍵</span>
+                        </button>
+                        <div class="text-[10px] font-bold text-[#7d3c0a] text-center">
+                            鍵盤 <kbd class="px-1 py-0.5 bg-amber-100 border border-amber-400 rounded text-[#690b0b]">Space</kbd> 或 <kbd class="px-1 py-0.5 bg-amber-100 border border-amber-400 rounded text-[#690b0b]">A</kbd><kbd class="px-1 py-0.5 bg-amber-100 border border-amber-400 rounded text-[#690b0b]">D</kbd> 踏步
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stage Camera Director (遠端控制左螢幕 3D 攝影機視角) -->
+                <div class="pt-1.5 border-t border-[#d49b27]/40">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[11px] font-black text-[#690b0b] flex items-center gap-1">
+                            <i class="fas fa-video text-[#990f0f]"></i> 左螢幕【純淨主舞台】鏡頭導播切換：
+                        </span>
+                        <span id="ui-cam-label" class="text-[10px] font-bold text-[#990f0f]">目前視角：全景大舞台</span>
+                    </div>
+                    <div class="grid grid-cols-5 gap-1">
+                        <button data-cam="panorama" class="cam-director-btn cam-btn-active btn-vermilion rounded-lg py-1.5 px-1 text-[11px] font-bold truncate">
+                            🏯 全景舞台
+                        </button>
+                        <button data-cam="dragon" class="cam-director-btn btn-vermilion rounded-lg py-1.5 px-1 text-[11px] font-bold truncate">
+                            🐉 飛龍特寫
+                        </button>
+                        <button data-cam="lion" class="cam-director-btn btn-vermilion rounded-lg py-1.5 px-1 text-[11px] font-bold truncate">
+                            🦁 瑞獅跳樁
+                        </button>
+                        <button data-cam="sky" class="cam-director-btn btn-vermilion rounded-lg py-1.5 px-1 text-[11px] font-bold truncate">
+                            🎆 仰望煙火
+                        </button>
+                        <button data-cam="orbit" class="cam-director-btn btn-vermilion rounded-lg py-1.5 px-1 text-[11px] font-bold truncate">
+                            🔄 環繞運鏡
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Showstopper Choreography Triggers (主舞台大招特效指令) -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <button id="btn-stunt-dragon" class="btn-imperial-gold rounded-xl py-2 px-2 text-xs font-black flex items-center justify-center gap-1">
+                        <span>🐉</span> 祥龍8字舞
+                    </button>
+                    <button id="btn-stunt-lion" class="btn-imperial-gold rounded-xl py-2 px-2 text-xs font-black flex items-center justify-center gap-1">
+                        <span>🦁</span> 醒獅高樁連跳
+                    </button>
+                    <button id="btn-stunt-lanterns" class="btn-imperial-gold rounded-xl py-2 px-2 text-xs font-black flex items-center justify-center gap-1">
+                        <span>🏮</span> 祈福天燈金幣雨
+                    </button>
+                    <button id="btn-stunt-climax" class="btn-vermilion rounded-xl py-2 px-2 text-xs font-black flex items-center justify-center gap-1 border-yellow-300">
+                        <span>🎆</span> 龍獅齊舞大招
+                    </button>
+                </div>
+            </div>
+
+            <!-- 5. PARCHMENT CARD D: POSTER 3 KEY HIGHLIGHTS (海報三大核心特色卷軸卡) -->
+            <div class="parchment-scroll-card rounded-2xl p-3 relative z-10">
+                <div class="grid grid-cols-1 gap-1.5 text-xs">
+                    <!-- Highlight 1 -->
+                    <div class="flex items-center gap-2.5 bg-[#fffdf7]/90 rounded-xl px-2.5 py-1.5 border border-[#e3be78]">
+                        <div class="w-8 h-8 rounded-full bg-[#8f0d0d] border-2 border-[#ffd166] text-[#ffd166] flex items-center justify-center shrink-0">
+                            <i class="fas fa-wand-magic-sparkles text-xs"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-black text-[#690b0b] truncate">• 揮動或搖動裝置，帶動舞龍舞獅表演</div>
+                            <div class="text-[10px] text-[#7d4e24] truncate">右螢幕偵測揮手與打鼓，左螢幕純淨 3D 舞台即時呈現龍獅翻騰</div>
+                        </div>
+                    </div>
+
+                    <!-- Highlight 2 -->
+                    <div class="flex items-center gap-2.5 bg-[#fffdf7]/90 rounded-xl px-2.5 py-1.5 border border-[#e3be78]">
+                        <div class="w-8 h-8 rounded-full bg-[#8f0d0d] border-2 border-[#ffd166] text-[#ffd166] flex items-center justify-center shrink-0">
+                            <i class="fas fa-bahai text-xs"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-black text-[#690b0b] truncate">• 動作越協調，畫面越壯觀</div>
+                            <div class="text-[10px] text-[#7d4e24] truncate">雙手揮動搭配跑動踏步，協調度達 80% 綻放滿天皇家煙火與天燈</div>
+                        </div>
+                    </div>
+
+                    <!-- Highlight 3 -->
+                    <div class="flex items-center gap-2.5 bg-[#fffdf7]/90 rounded-xl px-2.5 py-1.5 border border-[#e3be78]">
+                        <div class="w-8 h-8 rounded-full bg-[#8f0d0d] border-2 border-[#ffd166] text-[#ffd166] flex items-center justify-center shrink-0">
+                            <i class="fas fa-users text-xs"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-black text-[#690b0b] truncate">• 適合團體合作與大型活動展演</div>
+                            <div class="text-[10px] text-[#7d4e24] truncate">左螢幕外接巨型投影幕純淨展演，右螢幕作為前場體感與數據中控台</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </aside>
+    </div>
+
+    <!-- =======================================================================
+         DUAL-WINDOW POP-OUT MODAL (彈出獨立雙視窗指引)
+         ======================================================================= -->
+    <div id="popout-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="parchment-scroll-card rounded-3xl max-w-lg w-full p-5 sm:p-6 relative border-4 border-[#d49b27]">
+            <button id="btn-close-popout-modal" class="absolute top-3 right-3 w-9 h-9 rounded-full bg-[#8a1111] text-[#ffd166] flex items-center justify-center font-bold hover:scale-105 transition">
+                <i class="fas fa-times"></i>
+            </button>
+
+            <div class="flex items-center gap-3 mb-3">
+                <div class="badge-07 w-12 h-12 rounded-full flex items-center justify-center shrink-0">
+                    <i class="fas fa-desktop text-white text-lg"></i>
+                </div>
+                <div>
+                    <h2 class="serif-title text-xl sm:text-2xl font-black text-[#730808]">左舞台 × 右資訊幕 雙視窗分離展演</h2>
+                    <p class="text-xs font-bold text-[#994100]">主舞台 100% 純淨無字，所有數據與控制統一由右螢幕呈現</p>
+                </div>
+            </div>
+
+            <div class="space-y-2.5 my-4">
+                <button id="btn-exec-popout-right" class="w-full btn-vermilion rounded-2xl p-3.5 text-left flex items-center justify-between gap-3">
+                    <div>
+                        <div class="font-black text-sm sm:text-base text-[#ffd166]">
+                            🪟 方案 A：彈出【右方資訊中控螢幕】新視窗（推薦！）
+                        </div>
+                        <div class="text-xs text-amber-100/90 mt-0.5">
+                            跳出獨立的「右資訊螢幕」讓您拉到隔壁螢幕；原視窗自動變為 **100% 全螢幕純淨 3D 主舞台**！
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-[#ffd166] text-lg shrink-0"></i>
+                </button>
+
+                <button id="btn-exec-popout-left" class="w-full btn-imperial-gold rounded-2xl p-3.5 text-left flex items-center justify-between gap-3">
+                    <div>
+                        <div class="font-black text-sm sm:text-base text-[#5c0606]">
+                            🪟 方案 B：彈出【左方純淨 3D 主舞台】新視窗
+                        </div>
+                        <div class="text-xs text-[#6e1a09] mt-0.5">
+                            跳出獨立的「100% 純淨 3D 主舞台」拉到大投影幕；原視窗保留為全螢幕「右方資訊中控台」！
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-[#5c0606] text-lg shrink-0"></i>
+                </button>
+            </div>
+
+            <div class="text-[11px] font-bold text-[#7d3c0a] bg-[#fffdf7] p-2.5 rounded-xl border border-[#d9a74a]">
+                💡 提示：您也可以直接開啟兩個相同的 HTML 檔案分頁，在上方切換為「純左舞台」與「純右資訊幕」，兩邊會透過瀏覽器底層通道 60FPS 即時同步！
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /********************************************************************
+         * 1. WEB AUDIO SYNTHESIZER (鑼鼓喧天：大堂鼓、銅鈸、大鑼、煙火音效)
+         ********************************************************************/
+        class FestiveAudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+                this.lastDrumTime = 0;
+                this.lastCymbalTime = 0;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            toggle() {
+                this.enabled = !this.enabled;
+                if (this.enabled) this.init();
+                return this.enabled;
+            }
+
+            playDrum(intensity = 1.0, pitchOffset = 0) {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                if (now - this.lastDrumTime < 0.065) return;
+                this.lastDrumTime = now;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                const startFreq = 138 + pitchOffset * 24;
+                osc.frequency.setValueAtTime(startFreq, now);
+                osc.frequency.exponentialRampToValueAtTime(46, now + 0.23);
+
+                const vol = Math.min(0.65, 0.25 + intensity * 0.35);
+                gain.gain.setValueAtTime(vol, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.27);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.28);
+            }
+
+            playCymbal(intensity = 0.8) {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                if (now - this.lastCymbalTime < 0.14) return;
+                this.lastCymbalTime = now;
+
+                const bufferSize = this.ctx.sampleRate * 0.34;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.1));
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(5300, now);
+                filter.Q.setValueAtTime(1.8, now);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(Math.min(0.34, intensity * 0.28), now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.33);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start(now);
+            }
+
+            playGong() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime;
+                const freqs = [196, 294, 392, 523.25, 659.25];
+                freqs.forEach((f, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
+                    osc.frequency.setValueAtTime(f, now);
+                    osc.frequency.exponentialRampToValueAtTime(f * 0.96, now + 1.2);
+
+                    gain.gain.setValueAtTime(0.12 / (idx + 1), now);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.25);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 1.3);
+                });
+                this.playCymbal(1.0);
+            }
+
+            playFireworkBurst() {
+                if (!this.enabled || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const bufferSize = this.ctx.sampleRate * 0.21;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.06));
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1600, now);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.16, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start(now);
+            }
+        }
+
+        const audio = new FestiveAudioEngine();
+
+        /********************************************************************
+         * 2. UNIFIED GAME & DUAL-SCREEN STATE
+         ********************************************************************/
+        const urlScreenParam = new URLSearchParams(window.location.search).get('screen');
+        const initialLayout = window.__INITIAL_LAYOUT_MODE__ || urlScreenParam || 'split'; // 'split' | 'left_only' | 'right_only'
+
+        const gameState = {
+            layoutMode: initialLayout,
+            cameraMode: 'panorama', // 'panorama' | 'dragon' | 'lion' | 'sky' | 'orbit'
+            leftHand: { x: -0.42, y: 0.12, energy: 0.32 },
+            rightHand: { x: 0.42, y: 0.12, energy: 0.32 },
+            dragonTarget: new THREE.Vector3(0, 4.5, 2),
+            waveEnergy: 0.30,
+            runCadence: 0.0,
+            coordination: 45,
+            score: 1280,
+            combo: 1,
+            autoMoveMode: null,
+            autoMoveTimer: 0,
+            lionPoleIndex: 3,
+            lionJumpProgress: 0,
+            lionIsJumping: false,
+            lionFromPos: new THREE.Vector3(5.3, 2.02, 2.0),
+            lionToPos: new THREE.Vector3(5.3, 2.02, 2.0),
+            lionJumpHeight: 2.2,
+            webcamActive: false,
+            peerConnected: false,
+            lastPeerHeartbeat: 0
+        };
+
+        // Update Right-Screen Live Toast (Keeps Left 3D Stage 100% Pure & Text-Free!)
+        function notifyRightScreen(message) {
+            const toastEl = document.getElementById('right-live-toast');
+            if (!toastEl) return;
+            toastEl.textContent = message;
+            toastEl.classList.remove('right-screen-toast');
+            void toastEl.offsetWidth; // Reflow
+            toastEl.classList.add('right-screen-toast');
+        }
+
+        /********************************************************************
+         * 3. LEFT SCREEN: PURE 3D MAIN STAGE (THREE.JS SCENE)
+         ********************************************************************/
+        const stagePane = document.getElementById('left-stage-pane');
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x10031a);
+        scene.fog = new THREE.FogExp2(0x150421, 0.014);
+
+        const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+        camera.position.set(0, 5.6, 17.5);
+        camera.lookAt(0, 3.8, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        function resizeStageRenderer() {
+            const rect = stagePane.getBoundingClientRect();
+            const w = Math.max(1, rect.width);
+            const h = Math.max(1, rect.height);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        }
+
+        // Stage Illumination
+        const ambientLight = new THREE.AmbientLight(0xffd8a8, 0.68);
+        scene.add(ambientLight);
+
+        const stageDirLight = new THREE.DirectionalLight(0xfff1c1, 1.2);
+        stageDirLight.position.set(8, 18, 12);
+        stageDirLight.castShadow = true;
+        stageDirLight.shadow.mapSize.width = 1024;
+        stageDirLight.shadow.mapSize.height = 1024;
+        scene.add(stageDirLight);
+
+        const redRimLight = new THREE.PointLight(0xff2a2a, 1.7, 36);
+        redRimLight.position.set(-10, 7, -4);
+        scene.add(redRimLight);
+
+        const goldStageLight = new THREE.PointLight(0xffb700, 1.9, 32);
+        goldStageLight.position.set(0, 9, 5);
+        scene.add(goldStageLight);
+
+        // Helper for Festive Calligraphy Banner Texture ("春" / "福")
+        function createCalligraphyTexture(char, bgColor = '#c91818', textColor = '#ffd700') {
+            const c = document.createElement('canvas');
+            c.width = 256;
+            c.height = 256;
+            const ctx = c.getContext('2d');
+
+            const grad = ctx.createRadialGradient(128, 128, 20, 128, 128, 128);
+            grad.addColorStop(0, '#ff3b3b');
+            grad.addColorStop(1, bgColor);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 256, 256);
+
+            ctx.strokeStyle = textColor;
+            ctx.lineWidth = 10;
+            ctx.strokeRect(14, 14, 228, 228);
+
+            ctx.fillStyle = textColor;
+            ctx.font = '900 135px "Noto Serif TC", serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(char, 128, 136);
+
+            return new THREE.CanvasTexture(c);
+        }
+
+        const chunTexture = createCalligraphyTexture('春');
+
+        // 3.1 Imperial Circular Stage & 7 Plum Blossom Poles
+        const stageGroup = new THREE.Group();
+        scene.add(stageGroup);
+
+        const goldMat = new THREE.MeshStandardMaterial({
+            color: 0xffcf40,
+            roughness: 0.25,
+            metalness: 0.75,
+            emissive: 0x4a2f00
+        });
+
+        const stageBase = new THREE.Mesh(
+            new THREE.CylinderGeometry(12.5, 13.2, 1.2, 48),
+            new THREE.MeshStandardMaterial({ color: 0x8f0d0d, roughness: 0.4, metalness: 0.2 })
+        );
+        stageBase.position.y = -0.6;
+        stageBase.receiveShadow = true;
+        stageGroup.add(stageBase);
+
+        const stageRing = new THREE.Mesh(new THREE.TorusGeometry(12.55, 0.18, 16, 64), goldMat);
+        stageRing.rotation.x = Math.PI / 2;
+        stageRing.position.y = 0.02;
+        stageGroup.add(stageRing);
+
+        const carpet = new THREE.Mesh(
+            new THREE.CylinderGeometry(9.8, 9.8, 0.06, 48),
+            new THREE.MeshStandardMaterial({ color: 0xb81414, roughness: 0.6 })
+        );
+        carpet.position.y = 0.01;
+        carpet.receiveShadow = true;
+        stageGroup.add(carpet);
+
+        // 7 Plum Blossom Poles (梅花樁)
+        const plumPoles = [];
+        const polePositions = [
+            { x: 1.8, z: 3.2, h: 0.7 },
+            { x: 3.0, z: 2.5, h: 1.1 },
+            { x: 4.2, z: 3.1, h: 1.5 },
+            { x: 5.3, z: 2.0, h: 1.9 },
+            { x: 6.4, z: 2.8, h: 2.3 },
+            { x: 7.4, z: 1.6, h: 1.7 },
+            { x: 4.6, z: 0.8, h: 1.3 }
+        ];
+
+        polePositions.forEach(p => {
+            const poleGroup = new THREE.Group();
+            const poleMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.42, 0.36, p.h, 20),
+                new THREE.MeshStandardMaterial({ color: 0x9e1313, roughness: 0.35 })
+            );
+            poleMesh.position.y = p.h / 2;
+            poleMesh.castShadow = true;
+            poleMesh.receiveShadow = true;
+            poleGroup.add(poleMesh);
+
+            const topMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.48, 0.45, 0.14, 24),
+                new THREE.MeshStandardMaterial({
+                    color: 0xffd700,
+                    roughness: 0.25,
+                    metalness: 0.6,
+                    emissive: 0x331f00
+                })
+            );
+            topMesh.position.y = p.h + 0.05;
+            poleGroup.add(topMesh);
+
+            poleGroup.position.set(p.x, 0, p.z);
+            stageGroup.add(poleGroup);
+
+            plumPoles.push({
+                group: poleGroup,
+                topMesh,
+                x: p.x,
+                y: p.h + 0.12,
+                z: p.z
+            });
+        });
+
+        // Side Pillars & Palace Silhouette
+        function createStagePillar(x, z, bannerTex) {
+            const g = new THREE.Group();
+            const pillar = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.45, 0.5, 11, 20),
+                new THREE.MeshStandardMaterial({ color: 0x8f0d0d, roughness: 0.3 })
+            );
+            pillar.position.y = 5.5;
+            g.add(pillar);
+
+            for (let y of [1, 5.5, 10]) {
+                const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.08, 12, 24), goldMat);
+                ring.rotation.x = Math.PI / 2;
+                ring.position.y = y;
+                g.add(ring);
+            }
+
+            const banner = new THREE.Mesh(
+                new THREE.PlaneGeometry(2.1, 4.2),
+                new THREE.MeshBasicMaterial({ map: bannerTex, side: THREE.DoubleSide })
+            );
+            banner.position.set(x > 0 ? -1.4 : 1.4, 6.2, 0.2);
+            g.add(banner);
+
+            g.position.set(x, 0, z);
+            stageGroup.add(g);
+        }
+        createStagePillar(-10.5, -2.5, chunTexture);
+        createStagePillar(10.5, -2.5, chunTexture);
+
+        function createPalaceBackdrop() {
+            const backdropGroup = new THREE.Group();
+            [
+                { x: -11, z: -14, w: 7, h: 6.5 },
+                { x: 0, z: -16, w: 11, h: 8.5 },
+                { x: 11, z: -14, w: 7, h: 6.5 }
+            ].forEach(p => {
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(p.w, p.h, 4),
+                    new THREE.MeshStandardMaterial({ color: 0x2c0819, roughness: 0.8 })
+                );
+                body.position.set(p.x, p.h / 2, p.z);
+                backdropGroup.add(body);
+
+                const roof = new THREE.Mesh(
+                    new THREE.ConeGeometry(p.w * 0.78, 2.6, 4),
+                    new THREE.MeshStandardMaterial({ color: 0x6b140e, emissive: 0x290604, roughness: 0.5 })
+                );
+                roof.position.set(p.x, p.h + 1.2, p.z);
+                roof.rotation.y = Math.PI / 4;
+                backdropGroup.add(roof);
+            });
+            scene.add(backdropGroup);
+        }
+        createPalaceBackdrop();
+
+        // Hanging Red Lanterns
+        const lanterns = [];
+        function createLantern(x, y, z, scale = 1) {
+            const g = new THREE.Group();
+            const bodyGeo = new THREE.SphereGeometry(0.85 * scale, 20, 16);
+            bodyGeo.scale(1, 0.82, 1);
+            const body = new THREE.Mesh(
+                bodyGeo,
+                new THREE.MeshStandardMaterial({
+                    color: 0xff1e1e,
+                    emissive: 0xb81400,
+                    emissiveIntensity: 0.75,
+                    roughness: 0.3
+                })
+            );
+            g.add(body);
+
+            const capGeo = new THREE.CylinderGeometry(0.35 * scale, 0.35 * scale, 0.18 * scale, 16);
+            const topCap = new THREE.Mesh(capGeo, goldMat);
+            topCap.position.y = 0.68 * scale;
+            const botCap = new THREE.Mesh(capGeo, goldMat);
+            botCap.position.y = -0.68 * scale;
+            g.add(topCap, botCap);
+
+            const tassel = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.08 * scale, 0.22 * scale, 0.9 * scale, 10),
+                new THREE.MeshBasicMaterial({ color: 0xffbe0b })
+            );
+            tassel.position.y = -1.15 * scale;
+            g.add(tassel);
+
+            g.position.set(x, y, z);
+            scene.add(g);
+            lanterns.push({ group: g, baseY: y, phase: Math.random() * Math.PI * 2 });
+        }
+        createLantern(-8.5, 9.2, 1, 1.15);
+        createLantern(-5.2, 8.6, -2, 0.85);
+        createLantern(-2.0, 9.5, -3, 0.95);
+        createLantern(2.0, 9.5, -3, 0.95);
+        createLantern(5.2, 8.6, -2, 0.85);
+        createLantern(8.5, 9.2, 1, 1.15);
+
+        // Audience Silhouettes
+        const crowdMembers = [];
+        (function createAudienceCrowd() {
+            const crowdGroup = new THREE.Group();
+            for (let i = -11; i <= 11; i += 1.4) {
+                if (Math.abs(i) < 2.2) continue;
+                const person = new THREE.Group();
+                const head = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.28, 12, 12),
+                    new THREE.MeshBasicMaterial({ color: 0x1c0712 })
+                );
+                head.position.y = 0.95;
+                const torso = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.25, 0.32, 0.8, 10),
+                    new THREE.MeshBasicMaterial({ color: 0x260816 })
+                );
+                torso.position.y = 0.4;
+                person.add(head, torso);
+                person.position.set(i + (Math.random() - 0.5) * 0.4, -0.4, 9.5 + (Math.random() - 0.5) * 1.2);
+                crowdGroup.add(person);
+                crowdMembers.push({ mesh: person, baseY: person.position.y, phase: Math.random() * 6.28 });
+            }
+            scene.add(crowdGroup);
+        })();
+
+        // 3.2 Articulated 20-Segment 3D Golden Dragon & Pearl
+        const dragonGroup = new THREE.Group();
+        scene.add(dragonGroup);
+
+        const pearlGroup = new THREE.Group();
+        const pearlCore = new THREE.Mesh(
+            new THREE.SphereGeometry(0.52, 24, 24),
+            new THREE.MeshBasicMaterial({ color: 0xfff380 })
+        );
+        const pearlHalo = new THREE.Mesh(
+            new THREE.SphereGeometry(0.78, 24, 24),
+            new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.4 })
+        );
+        pearlGroup.add(pearlCore, pearlHalo);
+        pearlGroup.position.set(0, 4.5, 2);
+        scene.add(pearlGroup);
+
+        function createDragonHeadMesh() {
+            const head = new THREE.Group();
+            const redScaleMat = new THREE.MeshStandardMaterial({ color: 0xe61919, roughness: 0.3, metalness: 0.2, emissive: 0x3b0404 });
+            const brightGoldMat = new THREE.MeshStandardMaterial({ color: 0xffd700, roughness: 0.2, metalness: 0.7, emissive: 0x5c3c00 });
+            const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+
+            const skull = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.05, 1.3), redScaleMat);
+            skull.castShadow = true;
+            head.add(skull);
+
+            const snout = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.52, 1.15), brightGoldMat);
+            snout.position.set(0, 0.08, 1.05);
+            head.add(snout);
+
+            for (let side of [-1, 1]) {
+                const nostril = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), redScaleMat);
+                nostril.position.set(side * 0.3, 0.35, 1.45);
+                head.add(nostril);
+            }
+
+            const jawGroup = new THREE.Group();
+            const lowerJaw = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.28, 1.05), brightGoldMat);
+            lowerJaw.position.set(0, 0, 0.5);
+            const tongue = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.75), new THREE.MeshBasicMaterial({ color: 0xff3355 }));
+            tongue.position.set(0, 0.12, 0.55);
+            jawGroup.add(lowerJaw, tongue);
+            jawGroup.position.set(0, -0.32, 0.45);
+            jawGroup.rotation.x = 0.35;
+            head.add(jawGroup);
+            head.userData.jaw = jawGroup;
+
+            for (let side of [-1, 1]) {
+                const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 16), whiteMat);
+                eyeWhite.position.set(side * 0.58, 0.32, 0.45);
+                const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), pupilMat);
+                pupil.position.set(side * 0.65, 0.32, 0.64);
+                head.add(eyeWhite, pupil);
+
+                const brow = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.75, 8), brightGoldMat);
+                brow.position.set(side * 0.68, 0.72, 0.35);
+                brow.rotation.z = -side * 0.45;
+                brow.rotation.x = -0.3;
+                head.add(brow);
+
+                const horn = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.16, 1.5, 10), brightGoldMat);
+                horn.position.set(side * 0.45, 0.95, -0.35);
+                horn.rotation.x = -0.65;
+                horn.rotation.z = -side * 0.25;
+                head.add(horn);
+
+                const whisker = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.045, 8, 20, Math.PI * 1.1), brightGoldMat);
+                whisker.position.set(side * 0.65, 0.05, 1.35);
+                whisker.rotation.y = side * 0.5;
+                head.add(whisker);
+            }
+
+            for (let i = 0; i < 9; i++) {
+                const angle = (i / 8 - 0.5) * Math.PI * 1.1;
+                const spike = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.85, 8), i % 2 === 0 ? brightGoldMat : redScaleMat);
+                spike.position.set(Math.sin(angle) * 0.85, Math.cos(angle) * 0.85, -0.45);
+                spike.rotation.z = -angle;
+                spike.rotation.x = -0.4;
+                head.add(spike);
+            }
+
+            return head;
+        }
+
+        const NUM_DRAGON_SEGMENTS = 20;
+        const dragonSegments = [];
+        const dragonPathHistory = [];
+        const HISTORY_LENGTH = 160;
+
+        for (let i = 0; i < HISTORY_LENGTH; i++) {
+            const t = i * 0.12;
+            dragonPathHistory.push(new THREE.Vector3(
+                -2.5 + Math.cos(t) * 3.5,
+                4.2 + Math.sin(t * 1.5) * 1.2,
+                -1.0 + Math.sin(t) * 1.5
+            ));
+        }
+
+        const dragonHead = createDragonHeadMesh();
+        dragonHead.scale.setScalar(1.18);
+        dragonGroup.add(dragonHead);
+        dragonSegments.push(dragonHead);
+
+        const bodyRedMat = new THREE.MeshStandardMaterial({ color: 0xd91616, roughness: 0.35, metalness: 0.25, emissive: 0x380505 });
+        const bodyGoldMat = new THREE.MeshStandardMaterial({ color: 0xffc800, roughness: 0.25, metalness: 0.65, emissive: 0x4d3300 });
+
+        for (let i = 1; i < NUM_DRAGON_SEGMENTS; i++) {
+            const segGroup = new THREE.Group();
+            const taper = 1 - (i / NUM_DRAGON_SEGMENTS) * 0.62;
+            const radius = 0.62 * taper;
+
+            const segMesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 14), i % 2 === 0 ? bodyRedMat : bodyGoldMat);
+            segMesh.scale.set(1.0, 0.92, 1.25);
+            segMesh.castShadow = true;
+            segGroup.add(segMesh);
+
+            const fin = new THREE.Mesh(new THREE.ConeGeometry(0.16 * taper, 0.65 * taper, 6), bodyGoldMat);
+            fin.position.set(0, radius * 0.95, 0);
+            fin.rotation.x = -0.35;
+            segGroup.add(fin);
+
+            if (i === NUM_DRAGON_SEGMENTS - 1) {
+                for (let f = -1; f <= 1; f++) {
+                    const tailFeather = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1.2, 8), f === 0 ? bodyGoldMat : bodyRedMat);
+                    tailFeather.position.set(f * 0.2, 0, -0.6);
+                    tailFeather.rotation.x = -Math.PI / 2;
+                    tailFeather.rotation.z = f * 0.35;
+                    segGroup.add(tailFeather);
+                }
+            }
+
+            dragonGroup.add(segGroup);
+            dragonSegments.push(segGroup);
+        }
+
+        // 3.3 3D Festive Lion (瑞獅)
+        function createFestiveLion() {
+            const lion = new THREE.Group();
+            const lionRedMat = new THREE.MeshStandardMaterial({ color: 0xe61c1c, roughness: 0.35, emissive: 0x330404 });
+            const lionGoldMat = new THREE.MeshStandardMaterial({ color: 0xffcf33, roughness: 0.25, metalness: 0.55 });
+            const fluffyWhiteMat = new THREE.MeshStandardMaterial({ color: 0xfffdf7, roughness: 0.7, emissive: 0x221d18 });
+
+            const headGroup = new THREE.Group();
+            headGroup.position.set(0, 1.35, 0.35);
+
+            const headDome = new THREE.Mesh(new THREE.SphereGeometry(0.95, 24, 20), lionRedMat);
+            headDome.scale.set(1.12, 0.98, 1.02);
+            headDome.castShadow = true;
+            headGroup.add(headDome);
+
+            for (let i = 0; i < 14; i++) {
+                const angle = (i / 14) * Math.PI * 2;
+                const pom = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 12), fluffyWhiteMat);
+                pom.position.set(Math.cos(angle) * 0.92, -0.35 + Math.sin(angle * 2) * 0.08, Math.sin(angle) * 0.88);
+                headGroup.add(pom);
+            }
+
+            for (let side of [-1, 1]) {
+                for (let j = 0; j < 4; j++) {
+                    const browPom = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), fluffyWhiteMat);
+                    browPom.position.set(side * (0.28 + j * 0.16), 0.42 + (j === 1 ? 0.1 : 0), 0.78 - j * 0.06);
+                    headGroup.add(browPom);
+                }
+
+                const eyeOuter = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+                eyeOuter.position.set(side * 0.44, 0.14, 0.78);
+                const eyeIris = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 14), new THREE.MeshBasicMaterial({ color: 0x3b1704 }));
+                eyeIris.position.set(side * 0.47, 0.14, 0.92);
+                const eyeSparkle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+                eyeSparkle.position.set(side * 0.42, 0.22, 1.06);
+                headGroup.add(eyeOuter, eyeIris, eyeSparkle);
+
+                const earGroup = new THREE.Group();
+                const earOuter = new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 14), fluffyWhiteMat);
+                earOuter.scale.set(0.8, 1.2, 0.5);
+                const earInner = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), lionGoldMat);
+                earInner.position.z = 0.1;
+                earGroup.add(earOuter, earInner);
+                earGroup.position.set(side * 0.85, 0.78, 0.1);
+                earGroup.rotation.z = -side * 0.35;
+                headGroup.add(earGroup);
+                if (side === -1) headGroup.userData.leftEar = earGroup;
+                else headGroup.userData.rightEar = earGroup;
+            }
+
+            const mirror = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.08, 16), new THREE.MeshBasicMaterial({ color: 0x38e8ff }));
+            mirror.rotation.x = Math.PI / 2 - 0.3;
+            mirror.position.set(0, 0.58, 0.78);
+            headGroup.add(mirror);
+
+            const horn = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.48, 12), lionGoldMat);
+            horn.position.set(0, 0.92, 0.52);
+            horn.rotation.x = 0.35;
+            headGroup.add(horn);
+
+            const mouthSmile = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.28, 0.55), new THREE.MeshBasicMaterial({ color: 0x800808 }));
+            mouthSmile.position.set(0, -0.22, 0.72);
+            headGroup.add(mouthSmile);
+
+            lion.add(headGroup);
+            lion.userData.head = headGroup;
+
+            const bodyGroup = new THREE.Group();
+            bodyGroup.position.set(0, 0.85, -0.55);
+            const torso = new THREE.Mesh(new THREE.SphereGeometry(0.78, 20, 16), lionRedMat);
+            torso.scale.set(1.05, 0.88, 1.35);
+            torso.castShadow = true;
+            bodyGroup.add(torso);
+
+            for (let r = 0; r < 3; r++) {
+                const trimRing = new THREE.Mesh(new THREE.TorusGeometry(0.68 - r * 0.08, 0.11, 10, 20), r % 2 === 0 ? lionGoldMat : fluffyWhiteMat);
+                trimRing.position.set(0, 0.1, -0.25 * r);
+                trimRing.rotation.x = 0.5;
+                bodyGroup.add(trimRing);
+            }
+
+            const tail = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 12), fluffyWhiteMat);
+            tail.position.set(0, 0.25, -1.05);
+            bodyGroup.add(tail);
+            lion.userData.tail = tail;
+
+            lion.add(bodyGroup);
+            lion.userData.body = bodyGroup;
+
+            const legs = [];
+            [
+                { x: -0.45, z: 0.25 },
+                { x: 0.45, z: 0.25 },
+                { x: -0.45, z: -0.95 },
+                { x: 0.45, z: -0.95 }
+            ].forEach(off => {
+                const leg = new THREE.Group();
+                const pants = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.65, 12), lionRedMat);
+                pants.position.y = 0.32;
+                const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.09, 8, 16), fluffyWhiteMat);
+                cuff.rotation.x = Math.PI / 2;
+                cuff.position.y = 0.12;
+                leg.add(pants, cuff);
+                leg.position.set(off.x, 0, off.z);
+                lion.add(leg);
+                legs.push(leg);
+            });
+            lion.userData.legs = legs;
+
+            return lion;
+        }
+
+        const lion = createFestiveLion();
+        const startPole = plumPoles[gameState.lionPoleIndex];
+        lion.position.set(startPole.x, startPole.y, startPole.z);
+        lion.rotation.y = -0.35;
+        scene.add(lion);
+
+        // 3.4 Foreground Glowing Batons & Ribbon Trails
+        function createLightWand(glowColor, ribbonColor) {
+            const wandGroup = new THREE.Group();
+            const handle = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.09, 0.11, 0.75, 16),
+                new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.4 })
+            );
+            wandGroup.add(handle);
+
+            const tip = new THREE.Mesh(
+                new THREE.SphereGeometry(0.22, 16, 16),
+                new THREE.MeshBasicMaterial({ color: glowColor })
+            );
+            tip.position.y = 0.45;
+            wandGroup.add(tip);
+
+            const halo = new THREE.Mesh(
+                new THREE.SphereGeometry(0.42, 16, 16),
+                new THREE.MeshBasicMaterial({ color: ribbonColor, transparent: true, opacity: 0.45 })
+            );
+            halo.position.y = 0.45;
+            wandGroup.add(halo);
+
+            scene.add(wandGroup);
+
+            const trailPoints = [];
+            for (let i = 0; i < 28; i++) trailPoints.push(new THREE.Vector3(0, 2, 9));
+            const trailGeo = new THREE.BufferGeometry().setFromPoints(trailPoints);
+            const trailMat = new THREE.LineBasicMaterial({ color: ribbonColor, transparent: true, opacity: 0.85, linewidth: 3 });
+            const trailLine = new THREE.Line(trailGeo, trailMat);
+            scene.add(trailLine);
+
+            return { group: wandGroup, tip, halo, trailPoints, trailLine };
+        }
+
+        const leftWand = createLightWand(0xfff066, 0xffaa00);
+        const rightWand = createLightWand(0x66f0ff, 0x00b4ff);
+
+        // 3.5 Fireworks & Sky Blessing Lanterns / Golden Coin Rain
+        const fireworks = [];
+        const fireworkColors = [0xffd700, 0xff2a2a, 0x00f5d4, 0xff66c4, 0xff9e00];
+
+        function spawnFirework(x, y, z, particleCount = 55) {
+            const geo = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = [];
+            const color = new THREE.Color(fireworkColors[Math.floor(Math.random() * fireworkColors.length)]);
+
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
+
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                const speed = 3.5 + Math.random() * 5.5;
+                velocities.push(new THREE.Vector3(
+                    Math.sin(phi) * Math.cos(theta) * speed,
+                    Math.sin(phi) * Math.sin(theta) * speed,
+                    Math.cos(phi) * speed
+                ));
+            }
+
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const mat = new THREE.PointsMaterial({
+                color,
+                size: 0.42,
+                transparent: true,
+                opacity: 1.0,
+                blending: THREE.AdditiveBlending
+            });
+
+            const points = new THREE.Points(geo, mat);
+            scene.add(points);
+            fireworks.push({ points, velocities, age: 0, maxAge: 1.45 });
+            audio.playFireworkBurst();
+        }
+
+        // Floating Sky Lanterns & Golden Coins (祈福天燈與金幣雨)
+        const skyBlessings = [];
+        function spawnSkyLanternsAndCoins() {
+            for (let i = 0; i < 14; i++) {
+                const isLantern = i % 2 === 0;
+                const mesh = isLantern
+                    ? new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.32, 0.24, 0.68, 12),
+                        new THREE.MeshBasicMaterial({ color: 0xff9933 })
+                    )
+                    : new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.24, 0.24, 0.05, 16),
+                        goldMat
+                    );
+
+                mesh.position.set(
+                    (Math.random() - 0.5) * 18,
+                    isLantern ? 0.5 + Math.random() * 2 : 12 + Math.random() * 4,
+                    (Math.random() - 0.5) * 10
+                );
+                scene.add(mesh);
+                skyBlessings.push({
+                    mesh,
+                    isLantern,
+                    vy: isLantern ? (1.2 + Math.random() * 0.8) : -(3.2 + Math.random() * 1.8),
+                    rotSpeed: (Math.random() - 0.5) * 4,
+                    life: 5.5
+                });
+            }
+            audio.playGong();
+        }
+
+        /********************************************************************
+         * 4. LION POLE-JUMPING & MOTION CONTROLLER LOGIC
+         ********************************************************************/
+        function triggerRunStep(intensity = 1.0, fromPeer = false) {
+            gameState.runCadence = Math.min(1.0, gameState.runCadence + 0.32 * intensity);
+            gameState.coordination = Math.min(100, gameState.coordination + 3.8);
+            gameState.score += Math.round(25 * gameState.combo);
+
+            audio.playDrum(intensity, (gameState.lionPoleIndex % 3) * 0.4);
+
+            if (!gameState.lionIsJumping) {
+                const currentPole = plumPoles[gameState.lionPoleIndex];
+                gameState.lionPoleIndex = (gameState.lionPoleIndex + 1) % plumPoles.length;
+                const nextPole = plumPoles[gameState.lionPoleIndex];
+
+                gameState.lionFromPos.set(currentPole.x, currentPole.y, currentPole.z);
+                gameState.lionToPos.set(nextPole.x, nextPole.y, nextPole.z);
+                gameState.lionJumpProgress = 0;
+                gameState.lionIsJumping = true;
+                gameState.lionJumpHeight = 1.6 + Math.random() * 1.1;
+
+                nextPole.topMesh.material.emissive.setHex(0xff9900);
+                setTimeout(() => {
+                    nextPole.topMesh.material.emissive.setHex(0x331f00);
+                }, 350);
+
+                if (gameState.lionPoleIndex === 4) {
+                    audio.playCymbal(0.9);
+                    notifyRightScreen('🦁 瑞獅躍上最高梅花樁！+150 喜氣積分');
+                    spawnFirework(nextPole.x, 9.5, -6, 60);
+                }
+            }
+
+            if (!fromPeer) {
+                dualSync.sendEvent('DRUM_STEP', { intensity });
+            }
+        }
+
+        function handleDualBatonWave(normX, normY, broadcast = true) {
+            const dx = normX - (gameState.leftHand.x + 0.22);
+            const dy = normY - gameState.leftHand.y;
+            const speed = Math.hypot(dx, dy);
+
+            gameState.leftHand.x = Math.max(-1, Math.min(1, normX - 0.22));
+            gameState.leftHand.y = Math.max(-1, Math.min(1, normY));
+            gameState.rightHand.x = Math.max(-1, Math.min(1, normX + 0.22));
+            gameState.rightHand.y = Math.max(-1, Math.min(1, normY + Math.sin(performance.now() * 0.008) * 0.12));
+
+            if (speed > 0.012) {
+                gameState.leftHand.energy = Math.min(1.0, gameState.leftHand.energy + speed * 1.1);
+                gameState.rightHand.energy = Math.min(1.0, gameState.rightHand.energy + speed * 1.1);
+                gameState.waveEnergy = Math.min(1.0, gameState.waveEnergy + speed * 0.9);
+                gameState.coordination = Math.min(100, gameState.coordination + speed * 4.2);
+                gameState.score += Math.round(speed * 16 * gameState.combo);
+
+                if (speed > 0.18 && Math.random() < 0.28) {
+                    audio.playCymbal(Math.min(1, speed * 2));
+                }
+            }
+
+            if (broadcast) {
+                dualSync.sendStateSync();
+            }
+        }
+
+        /********************************************************************
+         * 5. RIGHT SCREEN: WEBCAM MOTION SENSOR & WAVE TOUCH PAD
+         ********************************************************************/
+        const videoEl = document.getElementById('webcam-video');
+        const camCanvas = document.getElementById('webcam-canvas');
+        camCanvas.width = 320;
+        camCanvas.height = 240;
+        let motionKit = null;
+        let lastStuntAt = 0;
+
+        function triggerStuntByPose(stunt, label) {
+            const t = performance.now();
+            if (t - lastStuntAt < 8000) return; // 大招冷卻 8 秒，避免連續誤觸
+            lastStuntAt = t;
+            notifyRightScreen(`${label} 觸發特技！`);
+            executeShowstopperStunt(stunt, false);
+        }
+
+        // 偵測邏輯全部在 motion-kit.js；這裡只負責「動作 → 遊戲行為」的對應
+        function initMotionKit() {
+            if (motionKit) return true;
+            if (!window.MotionKit) return false;
+            motionKit = MotionKit.create({
+                id: 'dragon-lion-dance',
+                title: '舞龍舞獅 · 體感鏡頭自動偵測與校正',
+                video: videoEl,
+                canvas: camCanvas,
+                lanes: 1,
+                legs: true,
+                require: ['shoulders'],
+                wizard: { tests: ['hands', 'step'] }
+            });
+            motionKit.on('frame', onMotionFrame);
+            motionKit.on('step', e => triggerRunStep(e.source === 'motion' ? 0.65 : Math.min(1, 0.6 + e.power * 2)));
+            motionKit.on('highKnee', () => triggerRunStep(1.0));
+            motionKit.on('jump', () => { triggerRunStep(1.2); notifyRightScreen('🦘 偵測到跳躍！瑞獅騰空飛躍'); });
+            motionKit.on('clap', () => {
+                audio.playCymbal(0.9);
+                gameState.coordination = Math.min(100, gameState.coordination + 10);
+                gameState.score += Math.round(60 * gameState.combo);
+                notifyRightScreen('👏 擊掌！鈸聲齊鳴・協調度上升');
+            });
+            motionKit.on('handsUp', () => triggerStuntByPose('lanterns', '🙌 雙手高舉'));
+            motionKit.on('armsWide', () => triggerStuntByPose('dragon', '🤸 張開雙臂'));
+            motionKit.on('backend', e => {
+                if (e.backend === 'motion') {
+                    document.getElementById('ui-sensor-mode-badge').textContent = '🟡 動態體感偵測中';
+                    notifyRightScreen('ℹ️ AI 骨架模型無法使用，已改用動態偵測（支援雙手揮動與踏步）');
+                }
+            });
+            return true;
+        }
+
+        // 每一幀：雙手位置/能量 → 左舞台雙杖與龍珠
+        function onMotionFrame(f) {
+            if (!gameState.webcamActive || !f || !f.tracking || !f.hands) return;
+            const pose = f.backend === 'pose';
+            const apply = (h, hand) => {
+                if (!h || !h.tracked) return false;
+                const tx = Math.max(-1, Math.min(1, h.rx * (pose ? 1.25 : 1)));
+                const ty = Math.max(-1, Math.min(1, h.ry + (pose ? 0.5 : 0))); // 骨架模式：手放下時杖不會貼地
+                hand.x += (tx - hand.x) * 0.45;
+                hand.y += (ty - hand.y) * 0.45;
+                if (h.energy > 0.08) hand.energy = Math.min(1.0, hand.energy + h.energy * 0.16);
+                return h.energy > 0.15;
+            };
+            const lMove = apply(f.hands.left, gameState.leftHand);
+            const rMove = apply(f.hands.right, gameState.rightHand);
+            if (lMove || rMove) {
+                const e = Math.max(f.hands.left ? f.hands.left.energy : 0, f.hands.right ? f.hands.right.energy : 0);
+                gameState.waveEnergy = Math.min(1.0, gameState.waveEnergy + 0.12 * e);
+                gameState.coordination = Math.min(100, gameState.coordination + (lMove && rMove ? 0.6 : 0.3));
+            }
+            dualSync.sendStateSync();
+        }
+
+        function resetWebcamUI() {
+            document.getElementById('webcam-box').classList.add('hidden');
+            document.getElementById('motion-bars-col').className = 'sm:col-span-12 space-y-1.5 bg-[#fffdf7] p-2.5 rounded-xl border border-[#d9a74a]';
+            document.getElementById('ui-webcam-btn-text').textContent = '開啟視訊體感';
+            document.getElementById('ui-sensor-mode-badge').textContent = '觸控 / 鍵盤體感';
+            document.getElementById('btn-webcam-recal').classList.add('hidden');
+        }
+
+        async function toggleWebcamSensor() {
+            const webcamBox = document.getElementById('webcam-box');
+            const barsCol = document.getElementById('motion-bars-col');
+            const btnText = document.getElementById('ui-webcam-btn-text');
+            const badge = document.getElementById('ui-sensor-mode-badge');
+
+            if (gameState.webcamActive) {
+                if (motionKit) motionKit.stop();
+                gameState.webcamActive = false;
+                resetWebcamUI();
+                notifyRightScreen('📷 已切換回觸控板與鍵盤體感模式');
+                return;
+            }
+
+            if (!initMotionKit()) {
+                notifyRightScreen('⚠️ 找不到 motion-kit.js（請與本檔放在同一資料夾），請使用下方感應板與戰鼓按鈕');
+                return;
+            }
+
+            gameState.webcamActive = true;
+            webcamBox.classList.remove('hidden');
+            barsCol.className = 'sm:col-span-7 space-y-1.5 bg-[#fffdf7] p-2.5 rounded-xl border border-[#d9a74a]';
+            btnText.textContent = '偵測中…';
+            badge.textContent = '⏳ 自動偵測校正中';
+
+            const res = await motionKit.start();
+            if (!res.ok) {
+                gameState.webcamActive = false;
+                resetWebcamUI();
+                notifyRightScreen('💡 ' + (res.message || '無法開啟相機') + '，請使用下方感應板與戰鼓按鈕');
+                return;
+            }
+
+            btnText.textContent = '關閉視訊體感';
+            badge.textContent = res.backend === 'pose' ? '🟢 AI 骨架體感偵測中' : '🟡 動態體感偵測中';
+            document.getElementById('btn-webcam-recal').classList.remove('hidden');
+            document.getElementById('btn-webcam-recal').classList.add('flex');
+            const q = res.quality;
+            notifyRightScreen(`🎥 視訊體感已就緒${q ? `（${q.label}・${q.score} 分）` : ''}！揮動雙手、原地踏步、跳躍、拍手、雙手高舉皆可觸發`);
+            audio.playGong();
+        }
+
+        // Right-Screen Interactive Wave Pad Canvas
+        const padCanvas = document.getElementById('right-pad-canvas');
+        const padCtx = padCanvas.getContext('2d');
+        const padParticles = [];
+
+        function resizeRightWavePad() {
+            const rect = padCanvas.parentElement.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                padCanvas.width = rect.width;
+                padCanvas.height = rect.height;
+            }
+        }
+
+        function handleWavePadInput(clientX, clientY) {
+            const rect = padCanvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            padParticles.push({ x: x - 14, y, color: '#ffd700', life: 1.0 });
+            padParticles.push({ x: x + 14, y, color: '#00e5ff', life: 1.0 });
+
+            const normX = (x / Math.max(1, rect.width)) * 2 - 1;
+            const normY = -((y / Math.max(1, rect.height)) * 2 - 1);
+            handleDualBatonWave(normX, normY, true);
+        }
+
+        padCanvas.addEventListener('mousemove', e => {
+            handleWavePadInput(e.clientX, e.clientY);
+        });
+        padCanvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            if (e.touches.length > 0) {
+                handleWavePadInput(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        // Also allow waving directly over the Left 3D Stage if desired
+        stagePane.addEventListener('mousemove', e => {
+            const rect = stagePane.getBoundingClientRect();
+            const normX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
+            const normY = -(((e.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1);
+            handleDualBatonWave(normX, normY, true);
+        });
+        stagePane.addEventListener('touchmove', e => {
+            if (e.touches.length > 0) {
+                const rect = stagePane.getBoundingClientRect();
+                const normX = ((e.touches[0].clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
+                const normY = -(((e.touches[0].clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1);
+                handleDualBatonWave(normX, normY, true);
+            }
+        }, { passive: true });
+
+        function renderWavePadParticles() {
+            if (padCanvas.width === 0) return;
+            padCtx.fillStyle = 'rgba(20, 2, 12, 0.22)';
+            padCtx.fillRect(0, 0, padCanvas.width, padCanvas.height);
+
+            // Draw live normalized baton cursors on the Right Info Pad
+            const lx = (gameState.leftHand.x * 0.5 + 0.5) * padCanvas.width;
+            const ly = (-gameState.leftHand.y * 0.5 + 0.5) * padCanvas.height;
+            const rx = (gameState.rightHand.x * 0.5 + 0.5) * padCanvas.width;
+            const ry = (-gameState.rightHand.y * 0.5 + 0.5) * padCanvas.height;
+
+            padCtx.beginPath();
+            padCtx.arc(lx, ly, 6, 0, Math.PI * 2);
+            padCtx.fillStyle = '#ffd700';
+            padCtx.fill();
+
+            padCtx.beginPath();
+            padCtx.arc(rx, ry, 6, 0, Math.PI * 2);
+            padCtx.fillStyle = '#00e5ff';
+            padCtx.fill();
+
+            for (let i = padParticles.length - 1; i >= 0; i--) {
+                const p = padParticles[i];
+                p.life -= 0.05;
+                if (p.life <= 0) {
+                    padParticles.splice(i, 1);
+                    continue;
+                }
+                padCtx.beginPath();
+                padCtx.arc(p.x, p.y, 7 * p.life, 0, Math.PI * 2);
+                padCtx.fillStyle = p.color;
+                padCtx.fill();
+            }
+        }
+
+        /********************************************************************
+         * 6. DUAL-SCREEN REAL-TIME SYNCHRONIZATION ENGINE
+         ********************************************************************/
+        class DualScreenSync {
+            constructor() {
+                this.channelName = 'dragon_lion_separated_dual_v2';
+                this.bc = null;
+                this.popupWin = null;
+                this.lastSyncSent = 0;
+
+                if ('BroadcastChannel' in window) {
+                    try {
+                        this.bc = new BroadcastChannel(this.channelName);
+                        this.bc.onmessage = e => this.onMessage(e.data);
+                    } catch (err) {}
+                }
+
+                window.addEventListener('message', e => {
+                    if (e.data && e.data.channel === this.channelName) {
+                        this.onMessage(e.data);
+                    }
+                });
+
+                window.addEventListener('storage', e => {
+                    if (e.key === this.channelName && e.newValue) {
+                        try {
+                            this.onMessage(JSON.parse(e.newValue));
+                        } catch (err) {}
+                    }
+                });
+
+                setInterval(() => {
+                    this.sendPacket({ type: 'HEARTBEAT', layout: gameState.layoutMode });
+                    if (gameState.peerConnected && Date.now() - gameState.lastPeerHeartbeat > 3500) {
+                        gameState.peerConnected = false;
+                        updateSyncBadgeUI();
+                    }
+                }, 1000);
+            }
+
+            sendPacket(payload) {
+                const packet = Object.assign({ channel: this.channelName, t: Date.now() }, payload);
+                if (this.bc) {
+                    try { this.bc.postMessage(packet); } catch (e) {}
+                }
+                try {
+                    if (this.popupWin && !this.popupWin.closed) this.popupWin.postMessage(packet, '*');
+                    if (window.opener && !window.opener.closed) window.opener.postMessage(packet, '*');
+                } catch (e) {}
+                if (payload.type !== 'STATE_SYNC') {
+                    try { localStorage.setItem(this.channelName, JSON.stringify(packet)); } catch (e) {}
+                }
+            }
+
+            sendStateSync() {
+                const now = performance.now();
+                if (now - this.lastSyncSent < 24) return;
+                this.lastSyncSent = now;
+
+                this.sendPacket({
+                    type: 'STATE_SYNC',
+                    leftHand: gameState.leftHand,
+                    rightHand: gameState.rightHand,
+                    waveEnergy: gameState.waveEnergy,
+                    runCadence: gameState.runCadence,
+                    coordination: gameState.coordination,
+                    score: gameState.score,
+                    combo: gameState.combo,
+                    cameraMode: gameState.cameraMode
+                });
+            }
+
+            sendEvent(eventName, data = {}) {
+                this.sendPacket({ type: 'EVENT', eventName, data });
+            }
+
+            onMessage(msg) {
+                if (!msg || msg.channel !== this.channelName) return;
+                gameState.peerConnected = true;
+                gameState.lastPeerHeartbeat = Date.now();
+                updateSyncBadgeUI();
+
+                if (msg.type === 'STATE_SYNC') {
+                    gameState.leftHand.x += (msg.leftHand.x - gameState.leftHand.x) * 0.6;
+                    gameState.leftHand.y += (msg.leftHand.y - gameState.leftHand.y) * 0.6;
+                    gameState.leftHand.energy = msg.leftHand.energy;
+                    gameState.rightHand.x += (msg.rightHand.x - gameState.rightHand.x) * 0.6;
+                    gameState.rightHand.y += (msg.rightHand.y - gameState.rightHand.y) * 0.6;
+                    gameState.rightHand.energy = msg.rightHand.energy;
+                    gameState.waveEnergy = Math.max(gameState.waveEnergy, msg.waveEnergy);
+                    gameState.runCadence = Math.max(gameState.runCadence, msg.runCadence);
+                    gameState.coordination = Math.max(gameState.coordination, msg.coordination);
+                    gameState.score = Math.max(gameState.score, msg.score);
+                    gameState.combo = Math.max(gameState.combo, msg.combo);
+                    if (msg.cameraMode && msg.cameraMode !== gameState.cameraMode) {
+                        setCameraDirectorMode(msg.cameraMode, true);
+                    }
+                } else if (msg.type === 'EVENT') {
+                    if (msg.eventName === 'DRUM_STEP') {
+                        triggerRunStep(msg.data.intensity || 1.0, true);
+                    } else if (msg.eventName === 'CAMERA_CHANGE') {
+                        setCameraDirectorMode(msg.data.mode, true);
+                    } else if (msg.eventName === 'STUNT_TRIGGER') {
+                        executeShowstopperStunt(msg.data.stunt, true);
+                    }
+                }
+            }
+
+            popoutWindow(popupMode, currentWindowNewMode) {
+                setWorkspaceLayout(currentWindowNewMode);
+
+                const features = 'width=980,height=760,left=140,top=60,menubar=no,toolbar=no,location=no,status=no';
+                const newWin = window.open('', 'DragonLionSeparatedScreen', features);
+                if (!newWin) {
+                    setWorkspaceLayout('split');
+                    notifyRightScreen('💡 瀏覽器阻擋了彈出視窗，請允許彈出視窗或使用並排模式');
+                    return;
+                }
+
+                this.popupWin = newWin;
+                let fullHtml = document.documentElement.outerHTML;
+                const injectScript = `<script>window.__INITIAL_LAYOUT_MODE__ = "${popupMode}";<\/script>`;
+                fullHtml = fullHtml.replace('<head>', '<head>' + injectScript);
+
+                newWin.document.open();
+                newWin.document.write('<!DOCTYPE html>' + fullHtml);
+                newWin.document.close();
+
+                gameState.peerConnected = true;
+                gameState.lastPeerHeartbeat = Date.now();
+                updateSyncBadgeUI();
+            }
+        }
+
+        const dualSync = new DualScreenSync();
+
+        /********************************************************************
+         * 7. WORKSPACE LAYOUT & CAMERA DIRECTOR CONTROLS
+         ********************************************************************/
+        function setWorkspaceLayout(mode) {
+            gameState.layoutMode = mode;
+            const leftPane = document.getElementById('left-stage-pane');
+            const rightPane = document.getElementById('right-info-pane');
+
+            if (mode === 'left_only') {
+                leftPane.className = 'w-full h-full relative shrink-0';
+                rightPane.classList.add('hidden');
+            } else if (mode === 'right_only') {
+                leftPane.className = 'hidden';
+                rightPane.classList.remove('hidden');
+                rightPane.className = 'w-full h-full flex flex-col justify-between p-4 sm:p-6 gap-3 relative z-10 max-w-5xl mx-auto';
+            } else {
+                // Default 'split': Left Pure 3D Stage (56%) + Right Parchment Info Screen (44%)
+                leftPane.className = 'w-full lg:w-[56%] h-[44%] lg:h-full relative shrink-0';
+                rightPane.classList.remove('hidden');
+                rightPane.className = 'w-full lg:w-[44%] h-[56%] lg:h-full flex flex-col justify-between p-2.5 sm:p-3.5 gap-2.5 relative z-10';
+            }
+
+            document.querySelectorAll('.layout-mode-btn').forEach(btn => {
+                if (btn.dataset.layout === mode) {
+                    btn.className = 'layout-mode-btn px-2 py-1 rounded-lg text-[11px] font-black bg-[#ffd166] text-[#5c0808] transition shadow';
+                } else {
+                    btn.className = 'layout-mode-btn px-2 py-1 rounded-lg text-[11px] font-bold bg-white/10 text-amber-200 hover:bg-white/20 transition';
+                }
+            });
+
+            setTimeout(() => {
+                resizeStageRenderer();
+                resizeRightWavePad();
+            }, 60);
+        }
+
+        function updateSyncBadgeUI() {
+            const dot = document.getElementById('sync-status-dot');
+            const text = document.getElementById('sync-status-text');
+            if (gameState.peerConnected) {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399] animate-pulse';
+                text.textContent = '🟢 雙視窗跨螢幕即時連線中 (60FPS 同步)';
+            } else {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-300 animate-pulse';
+                text.textContent = '雙螢幕即時連動中 (左純淨舞台・右資訊中控)';
+            }
+        }
+
+        function setCameraDirectorMode(mode, fromPeer = false) {
+            gameState.cameraMode = mode;
+            const labels = {
+                panorama: '目前視角：全景大舞台',
+                dragon: '目前視角：飛龍特寫',
+                lion: '目前視角：瑞獅跳樁特寫',
+                sky: '目前視角：仰望煙火視角',
+                orbit: '目前視角：環繞動態運鏡'
+            };
+            document.getElementById('ui-cam-label').textContent = labels[mode] || '目前視角：全景大舞台';
+
+            document.querySelectorAll('.cam-director-btn').forEach(btn => {
+                if (btn.dataset.cam === mode) {
+                    btn.classList.add('cam-btn-active');
+                } else {
+                    btn.classList.remove('cam-btn-active');
+                }
+            });
+
+            if (!fromPeer) {
+                dualSync.sendEvent('CAMERA_CHANGE', { mode });
+                notifyRightScreen(`🎥 主舞台鏡頭已切換為「${labels[mode].replace('目前視角：', '')}」`);
+            }
+        }
+
+        function executeShowstopperStunt(stunt, fromPeer = false) {
+            if (stunt === 'dragon') {
+                gameState.autoMoveMode = 'figure8';
+                gameState.autoMoveTimer = 4.5;
+                gameState.coordination = Math.min(100, gameState.coordination + 18);
+                audio.playGong();
+                notifyRightScreen('🐉 左舞台展演：祥龍獻瑞・雙龍戲珠 8 字大迴旋！');
+            } else if (stunt === 'lion') {
+                gameState.autoMoveMode = 'lionJump';
+                gameState.autoMoveTimer = 4.0;
+                gameState.coordination = Math.min(100, gameState.coordination + 18);
+                triggerRunStep(1.2, true);
+                notifyRightScreen('🦁 左舞台展演：醒獅採青・飛躍梅花樁連跳特技！');
+            } else if (stunt === 'lanterns') {
+                gameState.coordination = Math.min(100, gameState.coordination + 20);
+                gameState.score += 260;
+                spawnSkyLanternsAndCoins();
+                notifyRightScreen('🏮 左舞台展演：祈福天燈冉冉升空・天降財神金幣雨！');
+            } else if (stunt === 'climax') {
+                gameState.autoMoveMode = 'climax';
+                gameState.autoMoveTimer = 6.0;
+                gameState.coordination = 100;
+                gameState.combo = Math.min(9, gameState.combo + 1);
+                audio.playGong();
+                spawnSkyLanternsAndCoins();
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(() => {
+                        spawnFirework((Math.random() - 0.5) * 18, 8 + Math.random() * 5, -5 - Math.random() * 6, 70);
+                    }, i * 250);
+                }
+                notifyRightScreen('🎆 龍獅齊舞大招全開！協調度 100% 皇家煙火綻放！');
+            }
+
+            if (!fromPeer) {
+                dualSync.sendEvent('STUNT_TRIGGER', { stunt });
+            }
+        }
+
+        // Bind Right-Screen UI Controls
+        document.querySelectorAll('.layout-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => setWorkspaceLayout(btn.dataset.layout));
+        });
+
+        document.getElementById('btn-stage-restore-split').addEventListener('click', () => setWorkspaceLayout('split'));
+        document.getElementById('btn-stage-pop-right').addEventListener('click', () => {
+            dualSync.popoutWindow('right_only', 'left_only');
+        });
+
+        const popoutModal = document.getElementById('popout-modal');
+        document.getElementById('btn-popout-dual').addEventListener('click', () => popoutModal.classList.remove('hidden'));
+        document.getElementById('btn-close-popout-modal').addEventListener('click', () => popoutModal.classList.add('hidden'));
+
+        document.getElementById('btn-exec-popout-right').addEventListener('click', () => {
+            popoutModal.classList.add('hidden');
+            dualSync.popoutWindow('right_only', 'left_only');
+        });
+        document.getElementById('btn-exec-popout-left').addEventListener('click', () => {
+            popoutModal.classList.add('hidden');
+            dualSync.popoutWindow('left_only', 'right_only');
+        });
+
+        document.getElementById('btn-audio-toggle').addEventListener('click', () => {
+            const on = audio.toggle();
+            document.getElementById('icon-audio').className = on ? 'fas fa-volume-up text-sm' : 'fas fa-volume-mute text-sm opacity-60';
+            notifyRightScreen(on ? '🔊 鑼鼓喧天音效已開啟' : '🔇 舞台音效已靜音');
+        });
+
+        document.getElementById('btn-webcam-toggle').addEventListener('click', toggleWebcamSensor);
+        document.getElementById('btn-webcam-recal').addEventListener('click', () => { if (motionKit && motionKit.running) motionKit.recalibrate(); });
+
+        const drumBtn = document.getElementById('btn-tanggu-drum');
+        drumBtn.addEventListener('click', () => {
+            drumBtn.classList.add('drum-hit');
+            setTimeout(() => drumBtn.classList.remove('drum-hit'), 90);
+            triggerRunStep(1.15, false);
+        });
+
+        document.querySelectorAll('.cam-director-btn').forEach(btn => {
+            btn.addEventListener('click', () => setCameraDirectorMode(btn.dataset.cam, false));
+        });
+
+        document.getElementById('btn-stunt-dragon').addEventListener('click', () => executeShowstopperStunt('dragon', false));
+        document.getElementById('btn-stunt-lion').addEventListener('click', () => executeShowstopperStunt('lion', false));
+        document.getElementById('btn-stunt-lanterns').addEventListener('click', () => executeShowstopperStunt('lanterns', false));
+        document.getElementById('btn-stunt-climax').addEventListener('click', () => executeShowstopperStunt('climax', false));
+
+        // Keyboard Stepping & Device Shake
+        window.addEventListener('keydown', e => {
+            if (['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'KeyA', 'KeyD', 'KeyW'].includes(e.code)) {
+                e.preventDefault();
+                drumBtn.classList.add('drum-hit');
+                setTimeout(() => drumBtn.classList.remove('drum-hit'), 90);
+                triggerRunStep(1.0, false);
+            }
+        });
+
+        window.addEventListener('devicemotion', e => {
+            const acc = e.accelerationIncludingGravity;
+            if (!acc) return;
+            if (Math.hypot(acc.x || 0, acc.y || 0, acc.z || 0) > 16) {
+                triggerRunStep(0.85, false);
+            }
+        });
+
+        /********************************************************************
+         * 8. RIGHT SCREEN TELEMETRY UPDATER & MAIN 60FPS ANIMATION LOOP
+         ********************************************************************/
+        function updateRightInfoDashboard() {
+            const coord = Math.round(gameState.coordination);
+            document.getElementById('ui-harmony-pct').textContent = `${coord}%`;
+            document.getElementById('ui-harmony-bar').style.width = `${coord}%`;
+
+            const rankEl = document.getElementById('ui-rank');
+            const hintEl = document.getElementById('ui-harmony-hint');
+            if (coord >= 85) {
+                rankEl.textContent = '普天同慶';
+                rankEl.className = 'serif-title text-sm sm:text-base font-black text-yellow-300 leading-tight mt-0.5 animate-pulse';
+                hintEl.textContent = '🔥 【最高瑞兆】團隊動作極度協調！左舞台漫天煙火全開中！';
+                gameState.combo = Math.max(5, gameState.combo);
+            } else if (coord >= 65) {
+                rankEl.textContent = '飛龍在天';
+                rankEl.className = 'serif-title text-sm sm:text-base font-black text-amber-300 leading-tight mt-0.5';
+                hintEl.textContent = '✨ 龍獅默契絕佳！再加把勁衝上 85% 解鎖最高瑞兆！';
+                gameState.combo = Math.max(3, gameState.combo);
+            } else if (coord >= 45) {
+                rankEl.textContent = '雙獅獻瑞';
+                rankEl.className = 'serif-title text-sm sm:text-base font-black text-emerald-300 leading-tight mt-0.5';
+                hintEl.textContent = '💡 同時「揮動雙手」＋「踏步跑動」可衝上 85% 觸發皇家煙火！';
+                gameState.combo = Math.max(2, gameState.combo);
+            } else {
+                rankEl.textContent = '祥瑞初現';
+                rankEl.className = 'serif-title text-sm sm:text-base font-black text-amber-100 leading-tight mt-0.5';
+                gameState.combo = 1;
+            }
+
+            document.getElementById('ui-score').textContent = gameState.score.toLocaleString();
+            document.getElementById('ui-combo').textContent = `x${gameState.combo} 喜氣`;
+
+            const leftPct = Math.round(gameState.leftHand.energy * 100);
+            const rightPct = Math.round(gameState.rightHand.energy * 100);
+            const runPct = Math.round(gameState.runCadence * 100);
+
+            document.getElementById('ui-left-wave-text').textContent = `${leftPct}%`;
+            document.getElementById('ui-left-wave-bar').style.width = `${Math.max(10, leftPct)}%`;
+
+            document.getElementById('ui-right-wave-text').textContent = `${rightPct}%`;
+            document.getElementById('ui-right-wave-bar').style.width = `${Math.max(10, rightPct)}%`;
+
+            const poleNum = gameState.lionPoleIndex + 1;
+            document.getElementById('ui-run-cadence-text').textContent =
+                runPct > 25 ? `奔騰跳樁中 (梅花樁 #${poleNum}/7)` : `待機中 (梅花樁 #${poleNum}/7)`;
+            document.getElementById('ui-run-cadence-bar').style.width = `${Math.max(10, runPct)}%`;
+        }
+
+        const clock = new THREE.Clock();
+        let fireworkTimer = 0;
+        let autoStepAccum = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(clock.getDelta(), 0.1);
+            const elapsed = clock.getElapsedTime();
+
+            // Auto-Choreography Stunts
+            if (gameState.autoMoveMode) {
+                gameState.autoMoveTimer -= dt;
+                if (gameState.autoMoveMode === 'figure8' || gameState.autoMoveMode === 'climax') {
+                    const speed = 3.6;
+                    gameState.leftHand.x = Math.sin(elapsed * speed) * 0.75 - 0.15;
+                    gameState.leftHand.y = Math.sin(elapsed * speed * 2) * 0.45 + 0.15;
+                    gameState.rightHand.x = Math.sin(elapsed * speed + 0.6) * 0.75 + 0.15;
+                    gameState.rightHand.y = Math.cos(elapsed * speed * 2) * 0.45 + 0.15;
+                    gameState.leftHand.energy = 0.95;
+                    gameState.rightHand.energy = 0.95;
+                    gameState.waveEnergy = 0.95;
+                }
+                if (gameState.autoMoveMode === 'lionJump' || gameState.autoMoveMode === 'climax') {
+                    autoStepAccum += dt;
+                    if (autoStepAccum > 0.38) {
+                        autoStepAccum = 0;
+                        triggerRunStep(0.9, true);
+                    }
+                }
+                if (gameState.autoMoveTimer <= 0) {
+                    gameState.autoMoveMode = null;
+                }
+            }
+
+            // Natural Energy Decay
+            gameState.leftHand.energy = Math.max(0.16, gameState.leftHand.energy - dt * 0.45);
+            gameState.rightHand.energy = Math.max(0.16, gameState.rightHand.energy - dt * 0.45);
+            gameState.waveEnergy = Math.max(0.16, gameState.waveEnergy - dt * 0.35);
+            gameState.runCadence = Math.max(0.0, gameState.runCadence - dt * 0.45);
+            gameState.coordination = Math.max(28, gameState.coordination - dt * 2.0);
+
+            // Update 3D Light Batons & Ribbon Trails
+            const leftPos3D = new THREE.Vector3(gameState.leftHand.x * 6.5, 2.6 + gameState.leftHand.y * 3.2, 8.2);
+            const rightPos3D = new THREE.Vector3(gameState.rightHand.x * 6.5, 2.6 + gameState.rightHand.y * 3.2, 8.2);
+
+            leftWand.group.position.lerp(leftPos3D, 0.25);
+            leftWand.group.rotation.z = -gameState.leftHand.x * 0.6;
+            rightWand.group.position.lerp(rightPos3D, 0.25);
+            rightWand.group.rotation.z = -gameState.rightHand.x * 0.6;
+
+            [leftWand, rightWand].forEach(wand => {
+                const worldTip = new THREE.Vector3(0, 0.45, 0).applyMatrix4(wand.group.matrixWorld);
+                wand.trailPoints.pop();
+                wand.trailPoints.unshift(worldTip);
+                wand.trailLine.geometry.setFromPoints(wand.trailPoints);
+            });
+
+            // Update 3D Dragon & Glowing Pearl
+            const midHandX = (gameState.leftHand.x + gameState.rightHand.x) * 0.5;
+            const midHandY = (gameState.leftHand.y + gameState.rightHand.y) * 0.5;
+            const waveBoost = 1 + gameState.waveEnergy * 0.8 + gameState.runCadence * 0.6;
+
+            const targetPearlX = -2.2 + midHandX * 9.5 + Math.cos(elapsed * 2.2 * waveBoost) * 2.6;
+            const targetPearlY = 4.6 + midHandY * 3.4 + Math.sin(elapsed * 3.1 * waveBoost) * 1.4;
+            const targetPearlZ = -1.2 + Math.sin(elapsed * 1.8) * 2.4;
+
+            gameState.dragonTarget.set(targetPearlX, Math.max(1.8, targetPearlY), targetPearlZ);
+            pearlGroup.position.lerp(gameState.dragonTarget, 0.14);
+            pearlGroup.rotation.y += dt * 3.5;
+            pearlHalo.scale.setScalar(1 + Math.sin(elapsed * 8) * 0.18);
+
+            const currentHeadPos = dragonPathHistory[0].clone().lerp(pearlGroup.position, 0.22);
+            dragonPathHistory.unshift(currentHeadPos);
+            if (dragonPathHistory.length > HISTORY_LENGTH) dragonPathHistory.pop();
+
+            for (let i = 0; i < NUM_DRAGON_SEGMENTS; i++) {
+                const histIdx = Math.min(i * 4 + 2, dragonPathHistory.length - 1);
+                const lookIdx = Math.max(0, histIdx - 3);
+                const seg = dragonSegments[i];
+                seg.position.copy(dragonPathHistory[histIdx]);
+                seg.position.y += Math.sin(elapsed * 6 - i * 0.55) * 0.12 * waveBoost;
+                seg.lookAt(dragonPathHistory[lookIdx]);
+            }
+
+            if (dragonHead.userData.jaw) {
+                dragonHead.userData.jaw.rotation.x = 0.25 + Math.sin(elapsed * 7) * 0.18;
+            }
+
+            // Update 3D Festive Lion on Plum Blossom Poles
+            if (gameState.lionIsJumping) {
+                const jumpSpeed = 2.6 + gameState.runCadence * 1.8;
+                gameState.lionJumpProgress += dt * jumpSpeed;
+                if (gameState.lionJumpProgress >= 1.0) {
+                    gameState.lionJumpProgress = 1.0;
+                    gameState.lionIsJumping = false;
+                }
+                const p = gameState.lionJumpProgress;
+                lion.position.lerpVectors(gameState.lionFromPos, gameState.lionToPos, p);
+                lion.position.y += Math.sin(p * Math.PI) * gameState.lionJumpHeight;
+
+                const lookTarget = gameState.lionToPos.clone();
+                lookTarget.y = lion.position.y;
+                lion.lookAt(lookTarget);
+                lion.userData.head.rotation.x = -Math.sin(p * Math.PI) * 0.45;
+            } else {
+                const pole = plumPoles[gameState.lionPoleIndex];
+                const bounceSpeed = 5.5 + gameState.waveEnergy * 5;
+                lion.position.y = pole.y + Math.abs(Math.sin(elapsed * bounceSpeed)) * (0.18 + gameState.waveEnergy * 0.22);
+                lion.rotation.y += (-0.35 - lion.rotation.y) * 0.08;
+                lion.userData.head.rotation.z = Math.sin(elapsed * 4.5) * 0.16;
+                lion.userData.head.rotation.x = Math.sin(elapsed * 3.2) * 0.12;
+            }
+
+            if (lion.userData.head.userData.leftEar) {
+                lion.userData.head.userData.leftEar.rotation.z = 0.35 + Math.sin(elapsed * 10) * 0.2;
+                lion.userData.head.userData.rightEar.rotation.z = -0.35 - Math.sin(elapsed * 10) * 0.2;
+            }
+            if (lion.userData.tail) {
+                lion.userData.tail.position.x = Math.sin(elapsed * 12) * 0.15;
+            }
+            lion.userData.legs.forEach((leg, idx) => {
+                leg.rotation.x = Math.sin(elapsed * 9 + idx * Math.PI * 0.5) * (gameState.lionIsJumping ? 0.55 : 0.18);
+            });
+
+            // Lanterns, Crowd & Sky Blessings
+            lanterns.forEach(l => {
+                l.group.position.y = l.baseY + Math.sin(elapsed * 2 + l.phase) * 0.15;
+                l.group.rotation.z = Math.sin(elapsed * 1.5 + l.phase) * 0.08;
+            });
+
+            crowdMembers.forEach(c => {
+                const cheerAmp = gameState.coordination > 75 ? 0.22 : 0.08;
+                c.mesh.position.y = c.baseY + Math.abs(Math.sin(elapsed * 6 + c.phase)) * cheerAmp;
+            });
+
+            for (let i = skyBlessings.length - 1; i >= 0; i--) {
+                const b = skyBlessings[i];
+                b.life -= dt;
+                b.mesh.position.y += b.vy * dt;
+                b.mesh.rotation.y += b.rotSpeed * dt;
+                if (!b.isLantern) b.mesh.rotation.x += b.rotSpeed * dt;
+                if (b.life <= 0) {
+                    scene.remove(b.mesh);
+                    skyBlessings.splice(i, 1);
+                }
+            }
+
+            // Fireworks
+            fireworkTimer += dt;
+            const fwInterval = gameState.coordination >= 80 ? 0.55 : (gameState.coordination >= 50 ? 1.3 : 2.8);
+            if (fireworkTimer >= fwInterval) {
+                fireworkTimer = 0;
+                spawnFirework(
+                    (Math.random() - 0.5) * 20,
+                    7.5 + Math.random() * 5.5,
+                    -6 - Math.random() * 6,
+                    gameState.coordination >= 80 ? 65 : 40
+                );
+            }
+
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                const fw = fireworks[i];
+                fw.age += dt;
+                if (fw.age >= fw.maxAge) {
+                    scene.remove(fw.points);
+                    fw.points.geometry.dispose();
+                    fw.points.material.dispose();
+                    fireworks.splice(i, 1);
+                    continue;
+                }
+                const posAttr = fw.points.geometry.getAttribute('position');
+                for (let j = 0; j < fw.velocities.length; j++) {
+                    const v = fw.velocities[j];
+                    v.y -= 3.8 * dt;
+                    posAttr.array[j * 3] += v.x * dt;
+                    posAttr.array[j * 3 + 1] += v.y * dt;
+                    posAttr.array[j * 3 + 2] += v.z * dt;
+                }
+                posAttr.needsUpdate = true;
+                fw.points.material.opacity = 1 - (fw.age / fw.maxAge);
+            }
+
+            // Camera Director Smooth Transitions on Left Pure 3D Stage
+            let desiredCamPos = new THREE.Vector3(midHandX * 1.4, 5.6 + midHandY * 0.7, 17.5);
+            let desiredLookAt = new THREE.Vector3(0, 3.6, 0);
+
+            if (gameState.cameraMode === 'dragon') {
+                desiredCamPos.set(pearlGroup.position.x * 0.55 - 2.2, pearlGroup.position.y + 1.2, 10.8);
+                desiredLookAt.copy(pearlGroup.position);
+            } else if (gameState.cameraMode === 'lion') {
+                desiredCamPos.set(lion.position.x + 1.2, lion.position.y + 2.2, lion.position.z + 6.5);
+                desiredLookAt.set(lion.position.x, lion.position.y + 1.0, lion.position.z);
+            } else if (gameState.cameraMode === 'sky') {
+                desiredCamPos.set(0, 2.2, 14.5);
+                desiredLookAt.set(0, 8.2, -4);
+            } else if (gameState.cameraMode === 'orbit') {
+                desiredCamPos.set(Math.sin(elapsed * 0.45) * 16.5, 6.2 + Math.sin(elapsed * 0.9) * 1.5, Math.cos(elapsed * 0.45) * 16.5);
+                desiredLookAt.set(0, 3.8, 0);
+            }
+
+            camera.position.lerp(desiredCamPos, 0.06);
+            camera.lookAt(desiredLookAt);
+
+            if (gameState.layoutMode !== 'right_only') {
+                renderer.render(scene, camera);
+            }
+
+            if (gameState.layoutMode !== 'left_only') {
+                renderWavePadParticles();
+                updateRightInfoDashboard();
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            resizeStageRenderer();
+            resizeRightWavePad();
+        });
+
+        window.onload = function () {
+            setWorkspaceLayout(gameState.layoutMode);
+            resizeStageRenderer();
+            resizeRightWavePad();
+            animate();
+
+            setTimeout(() => {
+                spawnFirework(-5, 9.5, -6, 55);
+                spawnFirework(5, 10.2, -6, 55);
+            }, 350);
+        };
+    </script>
+</body>
+</html>
