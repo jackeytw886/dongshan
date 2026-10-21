@@ -16,3 +16,7 @@
 <!-- ai-project-management:end -->
 
 冬山鄉互動語音燈板導覽 - Deployed by EZPage
+
+## motion-games（3D 體感遊戲與共用模組）
+
+[`motion-games/`](motion-games/README.md)：舞龍舞獅與超慢跑兩款雙螢幕 3D 體感遊戲，以及可直接嵌入新遊戲的 MotionKit（鏡頭體感分級偵測）、DualScreenKit（雙視窗）與線條圖示。線上入口：https://jackeytw886.github.io/dongshan/motion-games/

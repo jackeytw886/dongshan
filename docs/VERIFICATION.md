@@ -30,3 +30,16 @@
 | 外部請求 | fonts.googleapis.com |
 
 未執行：實體裝置、真人相機／麥克風、展場環境與長時間運轉測試。
+
+## 2026-10-22 motion-games 檢查結果（Claude）
+
+基準：`bdcfcd3`。環境：Node.js 22、Playwright 1.56 Chromium（無頭、swiftshader 軟體繪圖、`--use-fake-device-for-media-stream` 假鏡頭）、本機 http-server；CDN 可連線。
+
+| 項目 | 結果 |
+| --- | --- |
+| `node motion-games/tests/motion-kit.test.js` | ✅ 32／32（站立不誤觸、頭上愛心不觸發高舉、Y 字、交叉、舉手、指向、傾斜、點頭/搖頭、走路與跑步狀態、跑道、11 種手指手勢、倒讚、單幀雜訊、雙手比心、自訂規則、連續動作、自訂姿勢、分級設定） |
+| `node motion-games/tests/smoke.js` | ✅ 18／18（入口、測試台鍵盤模擬；三個遊戲頁：彈出視窗版面、彈出視窗按鈕 → 主控端計分並同步、遙控字體、關閉還原、浮動版面；無 JS 錯誤） |
+| 假鏡頭啟動 | ✅ 舞龍舞獅 quick → Pose、advanced → Holistic＋校正精靈；超慢跑 run → Pose＋校正精靈；皆無錯誤 |
+| 畫面截圖檢查 | 兩款遊戲的並排、彈出資訊視窗（150%）、浮動資訊、選擇中心、多個舞台/時段/角色組合 |
+
+未執行：真人鏡頭動作準確度、真實雙螢幕與「送到副螢幕」權限流程、展場電腦效能、離線（無 CDN）環境。

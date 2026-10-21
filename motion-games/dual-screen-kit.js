@@ -78,7 +78,7 @@
 .ds-bar .ds-sep{width:1px;height:16px;background:rgba(255,255,255,.14);margin:0 3px}
 .ds-bar .ds-pct{min-width:38px;text-align:center;font-variant-numeric:tabular-nums;opacity:.9;cursor:pointer}
 .ds-dot{width:8px;height:8px;border-radius:50%;background:#64748b;margin:0 4px 0 6px;flex:none}.ds-dot.on{background:#34d399;box-shadow:0 0 0 3px rgba(52,211,153,.2)}
-.ds-st{padding-right:4px;opacity:.85;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.ds-st{padding-right:4px;opacity:.85;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ds-menu{position:fixed;z-index:2147482001;min-width:200px;padding:5px;border-radius:12px;background:rgba(10,14,22,.96);border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 50px rgba(0,0,0,.55);color:#e2e8f0;font:500 12.5px/1.2 system-ui,"Noto Sans TC",sans-serif;animation:ds-in .15s}
 .ds-menu h6{margin:6px 8px 4px;font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#94a3b8}
 .ds-menu button{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;padding:7px 8px;border-radius:8px;cursor:pointer}

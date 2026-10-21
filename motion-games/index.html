@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 體感遊戲 — 入口</title>
+    <script src="ui-icons.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 50% -10%, #12324a, #05070c 60%); color: #e2e8f0; font: 15px/1.6 system-ui, "Noto Sans TC", sans-serif; }
+        .wrap { max-width: 980px; margin: 0 auto; padding: 40px 20px 60px; }
+        h1 { margin: 0 0 4px; font-size: 26px; }
+        p.lead { margin: 0 0 26px; color: #94a3b8; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+        a.card { display: flex; flex-direction: column; gap: 6px; padding: 18px; border-radius: 16px; text-decoration: none; color: inherit; background: rgba(13, 21, 34, .85); border: 1px solid #1e2d45; transition: transform .15s, border-color .15s; }
+        a.card:hover { transform: translateY(-2px); border-color: #22d3ee; }
+        a.card b { display: flex; align-items: center; gap: 8px; font-size: 16.5px; }
+        a.card b .ic { font-size: 22px; color: #22d3ee; }
+        a.card span { color: #94a3b8; font-size: 13.5px; }
+        a.card small { color: #64748b; font-size: 12px; }
+        h2 { margin: 34px 0 12px; font-size: 15px; color: #94a3b8; font-weight: 700; }
+        ul { margin: 0; padding-left: 20px; color: #94a3b8; font-size: 13.5px; }
+        code { color: #7dd3fc; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>3D 體感遊戲・雙螢幕展演</h1>
+        <p class="lead">兩款遊戲共用同一套鏡頭體感模組（MotionKit）與雙視窗模組（DualScreenKit）。相機需要在 https 或 localhost 開啟。</p>
+        <div class="grid">
+            <a class="card" href="3d-09-dragon-lion.html"><b><i data-ic="dragon"></i>07 舞龍舞獅感應遊戲</b><span>揮手帶動金龍、踏步讓瑞獅跳樁、頭上比愛心放愛心煙火。</span><small>左：3D 主舞台｜右：導覽與資訊</small></a>
+            <a class="card" href="3d-10-slow-jog.html"><b><i data-ic="run"></i>3D 超慢跑環保闖關</b><span>原地踏步前進、左右移動換跑道、跳躍摘星、出拳揮擊塑膠怪。</span><small>上：3D 主舞台｜下：資訊座艙</small></a>
+            <a class="card" href="motion-lab.html"><b><i data-ic="radar"></i>體感偵測測試台</b><span>切換五種偵測分級，即時看到每個動作是否被偵測到，也能錄製自訂姿勢。</span><small>現場架設前先在這裡試鏡頭位置與光線</small></a>
+            <a class="card" href="game-template.html"><b><i data-ic="gamepad"></i>新遊戲範本</b><span>已接好體感分級與雙視窗；複製後改「設定」那一段就能開始做新遊戲。</span><small>game-template.html</small></a>
+        </div>
+        <h2>雙視窗怎麼用</h2>
+        <ul>
+            <li>按工具列「彈出資訊視窗」→ 新視窗拖到另一個螢幕；原視窗自動變成全螢幕 3D 舞台。視窗位置會記住，下次開在同一個螢幕。</li>
+            <li>「送到副螢幕」（螢幕圖示）：Chrome / Edge 會詢問「視窗管理」權限，允許後自動放到第二個螢幕。</li>
+            <li>字體大小：工具列 <code>−</code> <code>+</code>（或 <code>Alt</code>+<code>=</code> / <code>Alt</code>+<code>-</code>），在舞台視窗按也能遙控副螢幕的字體。</li>
+            <li>版面：<code>Alt</code>+<code>1</code> 並排、<code>2</code> 浮動資訊、<code>3</code> 僅舞台、<code>4</code> 僅資訊；<code>Alt</code>+<code>F</code> 全螢幕。</li>
+        </ul>
+        <h2>文件</h2>
+        <ul>
+            <li><a href="docs/MOTION_KIT_SPEC.md" style="color:#7dd3fc">MOTION_KIT_SPEC.md</a>：偵測分級、全部動作與判斷方式、API、如何新增動作</li>
+            <li><a href="docs/DUAL_SCREEN_SPEC.md" style="color:#7dd3fc">DUAL_SCREEN_SPEC.md</a>：雙視窗版面、彈出、第二螢幕、字體、同步方式</li>
+        </ul>
+    </div>
+</body>
+</html>

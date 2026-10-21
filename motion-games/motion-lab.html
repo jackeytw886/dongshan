@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>體感偵測測試台 — MotionKit</title>
+    <script src="motion-kit.js"></script>
+    <script src="ui-icons.js"></script>
+    <style>
+        :root { --bg: #070b12; --card: #0d1522; --line: #1d2a3f; --text: #e2e8f0; --muted: #8a9ab3; --acc: #22d3ee; --ok: #34d399; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, "Noto Sans TC", sans-serif; }
+        header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+        header h1 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+        header h1 .ic { color: var(--acc); }
+        header small { color: var(--muted); }
+        main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr); gap: 16px; padding: 16px 20px; }
+        @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+        .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+        .card h2 { margin: 0 0 10px; font-size: 13.5px; display: flex; align-items: center; gap: 7px; color: #cbd5e1; }
+        .card h2 .ic { color: var(--acc); font-size: 16px; }
+        .card h2 .r { margin-left: auto; font-weight: 500; color: var(--muted); font-size: 12px; }
+        .seg { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 3px; border-radius: 11px; background: #0a111c; border: 1px solid var(--line); }
+        .seg button { all: unset; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 2px; border-radius: 8px; font-size: 12.5px; font-weight: 700; color: var(--muted); text-align: center; }
+        .seg button .ic { font-size: 18px; }
+        .seg button.on { background: rgba(34, 211, 238, .16); color: #a5f3fc; box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .6); }
+        .desc { color: var(--muted); font-size: 12.5px; margin: 8px 2px 0; }
+        .btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 10px; font-weight: 700; font-size: 13px; background: #13213a; border: 1px solid #2a4a75; color: #cbd5e1; }
+        .btn:hover { filter: brightness(1.2); }
+        .btn.go { background: linear-gradient(90deg, #22d3ee, #34d399); color: #04121f; border: 0; }
+        .btn .ic { font-size: 15px; }
+        .view { position: relative; aspect-ratio: 4 / 3; background: #000; border-radius: 12px; overflow: hidden; }
+        .view canvas { width: 100%; height: 100%; display: block; }
+        .view .hint { position: absolute; inset: auto 0 0 0; padding: 8px 12px; background: linear-gradient(transparent, rgba(0, 0, 0, .85)); font-weight: 700; color: #a5f3fc; text-align: center; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+        .stat { background: #0a111c; border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
+        .stat small { display: block; color: var(--muted); font-size: 11px; }
+        .stat b { font-variant-numeric: tabular-nums; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+        .g { padding: 7px 9px; border-radius: 10px; background: #0a111c; border: 1px solid var(--line); transition: background .25s, border-color .25s; }
+        .g b { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+        .g b em { font-style: normal; margin-left: auto; font-size: 10px; padding: 0 6px; border-radius: 6px; background: #3b2a66; color: #ddd6fe; }
+        .g span { display: block; color: var(--muted); font-size: 11px; line-height: 1.35; margin-top: 2px; }
+        .g code { font-size: 10.5px; color: #7dd3fc; }
+        .g.off { opacity: .32; }
+        .g.hit { background: rgba(52, 211, 153, .18); border-color: var(--ok); }
+        .g .n { float: right; color: var(--ok); font-weight: 800; font-size: 12px; }
+        .log { height: 190px; overflow: auto; font: 12px/1.6 ui-monospace, monospace; background: #050910; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+        .log div { white-space: nowrap; }
+        .log .t { color: #64748b; margin-right: 8px; }
+        .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        input[type=text] { background: #0a111c; border: 1px solid var(--line); border-radius: 9px; color: var(--text); padding: 7px 10px; font: inherit; width: 160px; }
+        .tpl { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 9px; background: #0a111c; border: 1px solid var(--line); margin-top: 6px; }
+        .tpl button { all: unset; cursor: pointer; margin-left: auto; color: #f87171; }
+        kbd { font: 700 11px ui-monospace, monospace; padding: 1px 5px; border-radius: 5px; border: 1px solid #334155; background: #0f172a; }
+        label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1><i data-ic="radar"></i>體感偵測測試台</h1>
+        <small>MotionKit <span id="ver"></span>・選分級 → 開鏡頭 → 做動作，下方卡片會亮起並計數</small>
+        <span style="margin-left:auto" class="row">
+            <label><input id="dbg" type="checkbox" checked> 偵錯資訊</label>
+            <button id="start" class="btn go"><i id="startIc" data-ic="camera"></i><span id="startTx">開啟鏡頭</span></button>
+            <button id="recal" class="btn"><i data-ic="target"></i>重新校正</button>
+        </span>
+    </header>
+    <main>
+        <section style="display:flex;flex-direction:column;gap:14px">
+            <div class="card">
+                <h2><i data-ic="layers"></i>偵測分級</h2>
+                <div id="seg" class="seg"></div>
+                <div id="desc" class="desc"></div>
+            </div>
+            <div class="card">
+                <h2><i data-ic="camera"></i>即時畫面<span id="backend" class="r">未啟動</span></h2>
+                <div class="view"><canvas id="cv" width="640" height="480"></canvas><div id="hint" class="hint">按「開啟鏡頭」開始</div></div>
+                <video id="video" playsinline muted style="display:none"></video>
+                <div class="stats">
+                    <div class="stat"><small>移動狀態</small><b id="sMotion">-</b></div>
+                    <div class="stat"><small>步頻（步/分）</small><b id="sCad">0</b></div>
+                    <div class="stat"><small>身體傾斜</small><b id="sLean">0°</b></div>
+                    <div class="stat"><small>FPS</small><b id="sFps">0</b></div>
+                    <div class="stat"><small>左手手勢</small><b id="sHL">-</b></div>
+                    <div class="stat"><small>右手手勢</small><b id="sHR">-</b></div>
+                    <div class="stat"><small>姿勢</small><b id="sPose">-</b></div>
+                    <div class="stat"><small>有人在場</small><b id="sPres">-</b></div>
+                </div>
+            </div>
+            <div class="card">
+                <h2><i data-ic="star"></i>自訂姿勢錄製<span class="r">擺好姿勢後按錄製，3 秒內保持不動</span></h2>
+                <div class="row"><input id="tplName" type="text" value="我的姿勢"><button id="tplRec" class="btn"><i data-ic="target"></i>錄製</button><span id="tplMsg" class="desc" style="margin:0"></span></div>
+                <div id="tplList"></div>
+            </div>
+        </section>
+        <section style="display:flex;flex-direction:column;gap:14px">
+            <div class="card">
+                <h2><i data-ic="grid"></i>動作清單<span class="r">灰色 = 此分級未啟用</span></h2>
+                <div id="gest" class="grid"></div>
+            </div>
+            <div class="card">
+                <h2><i data-ic="book"></i>事件紀錄<span class="r">沒有鏡頭也能用鍵盤模擬：<kbd>Space</kbd> 踏步 <kbd>W</kbd> 跳躍 <kbd>H</kbd> 愛心 <kbd>T</kbd> 讚</span></h2>
+                <div id="log" class="log"></div>
+            </div>
+        </section>
+    </main>
+    <script>
+        const $ = id => document.getElementById(id);
+        $('ver').textContent = 'v' + MotionKit.VERSION;
+        const TIER_IC = { quick: 'zap', hands: 'hand', run: 'run', body: 'users', advanced: 'sparkle' };
+        let tier = (() => { try { return localStorage.getItem('motion-lab.tier') || 'body'; } catch (_) { return 'body'; } })();
+        const counts = {};
+
+        const kit = MotionKit.create({ id: 'motion-lab', preset: tier, video: $('video'), canvas: $('cv'), lanes: 3, debug: true, title: '體感偵測測試台' });
+        kit.bindKeys({ Space: 'step', KeyW: 'jump', KeyH: 'heart', KeyT: { name: 'thumbsUp', data: { side: 'right' } }, KeyA: { name: 'lane', data: { lane: 0 } }, KeyD: { name: 'lane', data: { lane: 2 } } });
+        // 自訂規則範例：右手摸頭（展示 defineGesture 用法）；連續動作範例：蹲下→跳躍 = 超級跳
+        kit.defineGesture('touchHead', c => c.near('rwr', 'nose', 0.35) || c.near('lwr', 'nose', 0.35), { hold: 300, cooldown: 1200 });
+        kit.defineSequence('superJump', ['squat', 'jump'], { within: 1800 });
+
+        function renderSeg() {
+            $('seg').innerHTML = Object.keys(MotionKit.PRESETS).map(k => '<button data-t="' + k + '" class="' + (k === tier ? 'on' : '') + '"><i data-ic="' + TIER_IC[k] + '"></i>' + MotionKit.PRESETS[k].label + '</button>').join('');
+            $('desc').textContent = MotionKit.PRESETS[tier].desc;
+        }
+        function renderGestures() {
+            const P = MotionKit.PRESETS[tier], adv = P.tier === 'advanced';
+            const extra = { touchHead: ['右手摸頭（自訂規則）', 'custom', 'defineGesture 範例：手腕靠近鼻子 0.3 秒'], superJump: ['超級跳（連續動作）', 'custom', 'defineSequence 範例：蹲下後 1.8 秒內跳躍'] };
+            const all = Object.assign({}, MotionKit.GESTURE_INFO, extra);
+            $('gest').innerHTML = Object.keys(all).map(k => {
+                const [name, t, how] = all[k];
+                const enabled = t === 'custom' || ((t === 'basic' || adv) && (!P.gestures || P.gestures.includes(k) || ['count', 'handShape', 'mouthClose'].includes(k)));
+                return '<div class="g' + (enabled ? '' : ' off') + '" id="g-' + k + '"><b>' + name + (t === 'advanced' ? '<em>進階</em>' : '') + '<span class="n" id="n-' + k + '">' + (counts[k] || '') + '</span></b><span>' + how + '</span><code>' + k + '</code></div>';
+            }).join('');
+        }
+        function log(n, d) {
+            const el = $('log'), row = document.createElement('div'), t = new Date().toTimeString().slice(0, 8);
+            const info = (MotionKit.GESTURE_INFO[n] || [n])[0], extra = d && Object.keys(d).filter(k => k !== 'simulated').map(k => k + '=' + (typeof d[k] === 'number' ? Math.round(d[k] * 100) / 100 : d[k])).join(' ');
+            row.innerHTML = '<span class="t">' + t + '</span><b>' + info + '</b> <span style="color:#64748b">' + n + (extra ? ' · ' + extra : '') + (d && d.simulated ? ' · 鍵盤模擬' : '') + '</span>';
+            el.prepend(row); while (el.children.length > 120) el.lastChild.remove();
+        }
+        kit.on('*', (n, d) => {
+            if (['frame', 'gesture', 'ready', 'perf', 'calibrated', 'preset', 'error', 'backend', 'camera'].includes(n)) { if (n === 'backend' || n === 'camera' || n === 'error') log(n, d); return; }
+            counts[n] = (counts[n] || 0) + 1;
+            const g = $('g-' + n); if (g) { g.classList.add('hit'); clearTimeout(g._t); g._t = setTimeout(() => g.classList.remove('hit'), 900); $('n-' + n).textContent = counts[n]; }
+            if (n === 'presence') $('sPres').textContent = d.present ? '是' : '否';
+            if (n === 'motion') $('sMotion').textContent = d.state;
+            log(n, d);
+        });
+        kit.on('frame', f => {
+            $('sCad').textContent = Math.round(f.cadence || 0);
+            $('sLean').textContent = f.tracking && kit.A ? Math.round(kit.A.leanDeg) + '°' : '-';
+            $('sFps').textContent = Math.round(kit.live.fps || 0);
+            $('sPose').textContent = f.pose || (f.tracking ? '-' : '未偵測');
+            const hs = f.handShapes, nm = h => h && h.tracked ? ((MotionKit.GESTURE_INFO[h.name] || ['手'])[0] + '・' + h.fingers + '指') : '-';
+            $('sHL').textContent = hs ? nm(hs.left) : (kit.backend === 'holistic' ? '-' : '需進階分級');
+            $('sHR').textContent = hs ? nm(hs.right) : (kit.backend === 'holistic' ? '-' : '需進階分級');
+            $('hint').textContent = kit.guide().text;
+        });
+
+        $('seg').addEventListener('click', async e => {
+            const b = e.target.closest('button'); if (!b) return;
+            tier = b.dataset.t; try { localStorage.setItem('motion-lab.tier', tier); } catch (_) { }
+            renderSeg(); renderGestures();
+            await kit.setPreset(tier);
+            $('backend').textContent = kit.running ? (kit.backend + '・' + MotionKit.PRESETS[tier].label) : '未啟動';
+        });
+        $('start').addEventListener('click', async () => {
+            if (kit.running) { kit.stop(); $('startTx').textContent = '開啟鏡頭'; $('startIc').dataset.ic = 'camera'; $('backend').textContent = '未啟動'; return; }
+            $('startTx').textContent = '啟動中…';
+            const r = await kit.start();
+            if (!r.ok) { $('startTx').textContent = '開啟鏡頭'; $('hint').textContent = r.message; return; }
+            $('startTx').textContent = '關閉鏡頭'; $('startIc').dataset.ic = 'cameraOff';
+            $('backend').textContent = r.backend + '・' + MotionKit.PRESETS[tier].label + (r.quality ? '・' + r.quality.label + ' ' + r.quality.score + ' 分' : '');
+        });
+        $('recal').addEventListener('click', () => kit.running ? kit.recalibrate() : null);
+        $('dbg').addEventListener('change', e => { kit.o.debug = e.target.checked; });
+
+        function renderTpl() {
+            $('tplList').innerHTML = kit.templates.map(t => '<div class="tpl"><i data-ic="star"></i><b>' + t.name + '</b><span class="desc" style="margin:0">容許誤差 ' + t.tol + '°</span><button data-n="' + t.name + '" title="刪除">' + UIIcons.svg('x', 16) + '</button></div>').join('') || '<div class="desc">尚未錄製（錄好的姿勢會存在這台電腦，偵測到時事件名稱就是姿勢名稱）</div>';
+        }
+        $('tplRec').addEventListener('click', async () => {
+            if (!kit.running) { $('tplMsg').textContent = '請先開啟鏡頭'; return; }
+            const name = $('tplName').value.trim() || '我的姿勢'; $('tplMsg').textContent = '錄製中，請保持姿勢…';
+            const tp = await kit.recordPose(name);
+            $('tplMsg').textContent = tp ? '已錄製「' + name + '」，現在擺出這個姿勢就會觸發' : '沒有偵測到人體，請再試一次';
+            renderTpl();
+        });
+        $('tplList').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { kit.removeTemplate(b.dataset.n); renderTpl(); } });
+
+        renderSeg(); renderGestures(); renderTpl();
+        const ctx = $('cv').getContext('2d'); ctx.fillStyle = '#05080f'; ctx.fillRect(0, 0, 640, 480);
+    </script>
+</body>
+</html>

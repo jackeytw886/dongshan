@@ -1,11 +1,11 @@
 # Handoff — P013 冬山鄉探險隊・互動語音燈板導覽
 
-- 更新時間：2026-10-18T03:25+08:00
-- 更新者：Claude（逐檔讀原始碼，撰寫專案交接）
+- 更新時間：2026-10-22T05:54+08:00
+- 更新者：Claude（新增 `motion-games/`：兩款 3D 體感遊戲改版與三個共用模組）
 - 倉庫：https://github.com/jackeytw886/dongshan
-- 分支：main
-- 本次基準 SHA：`f89d6fb653f430cc803a72d198ca196c5c9e20f2`（Codex 管理整理提交）
-- 核對層級：已讀網頁與音訊產生腳本；已執行語法檢查與無頭瀏覽器測試（見 docs/VERIFICATION.md）；**未重新執行 Python 音訊管線、未接實體燈板**。
+- 分支：`claude/clever-franklin-2l6wbx`（尚未合併到 main）
+- 本次基準 SHA：`bdcfcd33f377bdf4983abb337abce884d552c3d5`（上一份交接提交）
+- 核對層級：冬山導覽（第 1–7 節）沿用 2026-10-18 的紀錄，本次未改動 `index.html` 與音訊。`motion-games/` 已跑單元測試與無頭瀏覽器測試（見第 8 節與 docs/VERIFICATION.md）；**未做真人鏡頭、實際雙螢幕硬體與展場測試**。
 
 ## 1. 這是什麼
 
@@ -70,6 +70,38 @@ python run_all.py          # 或加 --test 先跑少量
 - 2026-02-21：經 EZPage 部署。
 - 2026-10-17：Codex 管理整理（代號 P013、AI 入口文件）。
 - 2026-10-18：Claude 補寫本交接，記錄音訊路徑問題。
+- 2026-10-21：Claude 新增 `motion-games/`（使用者上傳的兩款 3D 體感遊戲改版、MotionKit v2、DualScreenKit、UIIcons、測試台、範本）。
+
+## 8. motion-games：3D 體感遊戲與共用模組（2026-10-21 新增）
+
+來源：使用者上傳的 `files_6.zip`（`3d__9_optimized.html`、`3d__10_optimized.html`、`motion-kit.js` v1）。原檔先以提交 `c05afa4` 原樣入庫作為比對基準，之後的提交才是改版。內容與冬山導覽無關，只是放在本倉庫的子資料夾，`index.html`（Pages 入口）沒有改動。
+
+| 路徑 | 內容 |
+| --- | --- |
+| `motion-games/3d-09-dragon-lion.html` | 舞龍舞獅：夜空穹頂與星月、擺動聚光燈、福字地毯、鱗片金龍（龍鬚、爪、火焰鰭）、燈籠光暈、帶狀光棒拖尾、升空式煙火（含愛心煙火）、金箔飄落；介面改線條圖示；體感分級；雙視窗改用 DualScreenKit |
+| `motion-games/3d-10-slow-jog.html` | 超慢跑：卡通著色角色、腳下柔影、速度線、日月光暈、光澤題目徽章與看板、能量簾幕拱門、柔光粒子；資訊座艙改由狀態渲染（`renderAll()`），彈出視窗鏡像同步；容器查詢自動換排 |
+| `motion-games/motion-kit.js` | MotionKit v2：分級 `quick/hands/run/body/advanced`；新增愛心、Y 字、交叉、舉手、指向、傾斜、鞠躬、點頭、搖頭、跑步狀態；進階分級用 MediaPipe Holistic 辨識手指手勢與張嘴；自訂規則、連續動作、錄製姿勢、鍵盤模擬、有人站上/離開、ROI、鏡頭斷線重連 |
+| `motion-games/dual-screen-kit.js` | DualScreenKit v1：並排/浮動/僅舞台/僅資訊、彈出視窗（記住位置）、送到副螢幕（Window Management API）、全螢幕、資訊字體 70–300%（每種版面分開記、可遙控）、主控/鏡像同步 |
+| `motion-games/ui-icons.js` | 線條圖示，取代 Font Awesome 與按鈕表情符號 |
+| `motion-games/motion-lab.html`、`game-template.html`、`index.html` | 測試台、新遊戲範本、入口 |
+| `motion-games/docs/` | `MOTION_KIT_SPEC.md`、`DUAL_SCREEN_SPEC.md` |
+| `motion-games/tests/` | `motion-kit.test.js`（32 項）、`smoke.js`（18 項） |
+
+設計重點（決策另記於 docs/DECISIONS.md）：有舞台的視窗是主控端，資訊視窗只鏡像；所有按鈕、鍵盤、鏡頭動作都經 `ds.command()` 交給主控端；鏡頭可以開在任一視窗。
+
+驗證（2026-10-22，無頭 Chromium、swiftshader、假鏡頭）：
+
+- `node motion-games/tests/motion-kit.test.js`：32／32 通過（合成骨架與手部座標）。
+- `node motion-games/tests/smoke.js`：18／18 通過；三個遊戲頁都驗證了彈出視窗版面、從彈出視窗按鈕計分並同步、遙控字體 1.4→1.6、關閉後還原、浮動版面，全程無 JS 錯誤。
+- 假鏡頭開啟：quick（Pose）、advanced（Holistic＋校正精靈）、run（超慢跑）都能載入模型並處理影格，無錯誤。
+
+限制與下一步：
+
+- 未做真人測試：各動作門檻（愛心、鞠躬、點頭、手指手勢）只用合成資料驗證過，需要在展場光線與距離下用 `motion-lab.html` 實測再調 `thresholds`。
+- 未在真實雙螢幕上測「送到副螢幕」；該功能只在 Chrome / Edge 有效，其他瀏覽器退回手動拖曳。
+- 進階分級（Holistic）較耗效能，需在展場電腦實測 FPS。
+- 依賴 CDN（Tailwind、three.js r128、MediaPipe、Google Fonts）；離線展場需另外把這些檔案下載到本機。
+- 無頭瀏覽器的背景分頁計時器會暫停，`smoke.js` 因此在關閉彈出視窗後先把主視窗帶到前景；真實瀏覽器不受影響。
 
 ## 版本定位
 

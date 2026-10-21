@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新遊戲範本 — 體感＋雙螢幕</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- 三個共用模組：複製這個資料夾的 motion-kit.js / dual-screen-kit.js / ui-icons.js 到新遊戲旁邊即可 -->
+    <script src="motion-kit.js"></script>
+    <script src="dual-screen-kit.js"></script>
+    <script src="ui-icons.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { margin: 0; height: 100%; overflow: hidden; background: #05070c; color: #e2e8f0; font: 14px/1.5 system-ui, "Noto Sans TC", sans-serif; }
+        #app { display: flex; height: 100%; }
+        /* 預設「並排」版面由遊戲自己決定；其他版面（浮動/僅舞台/僅資訊）由 DualScreenKit 自動處理 */
+        #stage { position: relative; flex: 1 1 62%; min-width: 0; }
+        #stage canvas { display: block; width: 100%; height: 100%; }
+        #info { flex: 0 0 38%; overflow-y: auto; background: #0b1220; border-left: 1px solid #1e2d45; }
+        #info-scale { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+        .ds-l-info #info-scale { max-width: 1100px; margin: 0 auto; }
+        header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+        header h1 { margin: 0; font-size: 18px; white-space: nowrap; }
+        #ds-slot { margin-left: auto; }
+        .card { background: #0f1a2c; border: 1px solid #1e2d45; border-radius: 14px; padding: 12px; }
+        .card h2 { margin: 0 0 8px; font-size: 13px; color: #94a3b8; display: flex; align-items: center; gap: 6px; }
+        .big { font-size: 44px; font-weight: 900; color: #67e8f9; font-variant-numeric: tabular-nums; }
+        .row { display: flex; gap: 6px; flex-wrap: wrap; }
+        button.b { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 10px; background: #13213a; border: 1px solid #2a4a75; font-weight: 700; font-size: 13px; }
+        button.b.on { background: #22d3ee; color: #04121f; border-color: #22d3ee; }
+        #cam { width: 100%; aspect-ratio: 4/3; background: #000; border-radius: 10px; display: block; }
+        #toast { min-height: 22px; color: #a5f3fc; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <section id="stage"></section>
+        <aside id="info">
+            <div id="info-scale">
+                <header><i data-ic="gamepad" style="font-size:22px;color:#22d3ee"></i><h1>新遊戲範本</h1><div id="ds-slot"></div></header>
+                <div id="toast">做出動作，右邊會顯示，左邊方塊會反應</div>
+                <div class="card"><h2><i data-ic="star"></i>分數</h2><div id="score" class="big">0</div></div>
+                <div class="card"><h2><i data-ic="radar"></i>體感分級</h2><div id="tiers" class="row"></div>
+                    <div class="row" style="margin-top:8px"><button id="camBtn" class="b"><i data-ic="camera"></i><span id="camTx">開啟鏡頭</span></button></div>
+                    <canvas id="cam" width="320" height="240" style="margin-top:8px"></canvas><video id="vid" playsinline muted hidden></video>
+                </div>
+                <div class="card"><h2><i data-ic="hand"></i>沒有鏡頭時</h2><div class="row"><button class="b" data-g="step"><i data-ic="step"></i>踏步</button><button class="b" data-g="jump"><i data-ic="up"></i>跳躍</button><button class="b" data-g="heart"><i data-ic="heart"></i>愛心</button></div></div>
+            </div>
+        </aside>
+    </div>
+    <script>
+        /* ═════════ 1. 設定：新遊戲通常只要改這一段 ═════════ */
+        const GAME = {
+            app: 'my-new-game',          // 雙視窗頻道與記憶位置用的代號（每個遊戲不同）
+            title: '新遊戲範本',
+            tier: 'quick',               // 預設偵測分級：quick / hands / run / body / advanced
+            tiers: ['quick', 'hands', 'body', 'advanced'], // 介面上要開放的分級
+            // 動作 → 遊戲效果（名稱見 docs/MOTION_KIT_SPEC.md）
+            actions: {
+                step: g => { g.score += 1; bounce(0.4); },
+                jump: g => { g.score += 5; bounce(1.2); },
+                heart: g => { g.score += 20; spin(); say('收到愛心！+20'); },
+                heartHands: g => { g.score += 20; spin(); say('雙手比心！+20'); },
+                thumbsUp: g => { g.score += 10; say('讚！+10'); },
+                clap: g => { g.score += 3; flash(); },
+                wave: g => { flash(); }
+            }
+        };
+
+        /* ═════════ 2. 遊戲狀態（主控視窗計算，資訊視窗只顯示） ═════════ */
+        const G = { score: 0, toast: { seq: 0, msg: '' } };
+        function say(msg) { G.toast = { seq: G.toast.seq + 1, msg }; }
+
+        /* ═════════ 3. 雙視窗：只要指定舞台與資訊兩個區塊 ═════════ */
+        const ds = DualScreen.create({
+            app: GAME.app, title: GAME.title,
+            stage: '#stage', info: '#info', scale: '#info-scale', toolbar: { mount: '#ds-slot' },
+            onLayout: resize,
+            snapshot: () => ({ score: G.score, toast: G.toast }),   // 主控端 → 資訊視窗
+            apply: s => Object.assign(G, s)                         // 資訊視窗收到後套用
+        });
+        ds.handle('gesture', d => { const f = GAME.actions[d.name]; if (f) f(G, d.data || {}); });
+
+        /* ═════════ 4. 體感：任何視窗開鏡頭都可以，動作一律交給主控端 ═════════ */
+        let kit = null, tier = GAME.tier;
+        function ensureKit() {
+            if (kit) return kit;
+            kit = MotionKit.create({ id: GAME.app, preset: tier, video: document.getElementById('vid'), canvas: document.getElementById('cam'), lanes: 3 });
+            kit.on('gesture', e => ds.command('gesture', { name: e.name, data: e.data }));
+            return kit;
+        }
+        document.getElementById('camBtn').onclick = async () => {
+            const k = ensureKit();
+            if (k.running) { k.stop(); document.getElementById('camTx').textContent = '開啟鏡頭'; return; }
+            const r = await k.start(); document.getElementById('camTx').textContent = r.ok ? '關閉鏡頭' : '開啟鏡頭';
+            if (!r.ok) say(r.message);
+        };
+        function renderTiers() {
+            document.getElementById('tiers').innerHTML = GAME.tiers.map(t => '<button class="b' + (t === tier ? ' on' : '') + '" data-t="' + t + '">' + MotionKit.PRESETS[t].label + '</button>').join('');
+        }
+        document.getElementById('tiers').onclick = e => { const b = e.target.closest('[data-t]'); if (!b) return; tier = b.dataset.t; renderTiers(); if (kit) kit.setPreset(tier); };
+        document.querySelectorAll('[data-g]').forEach(b => b.onclick = () => ds.command('gesture', { name: b.dataset.g }));
+        window.addEventListener('keydown', e => { if (e.code === 'Space' && !e.altKey) { e.preventDefault(); ds.command('gesture', { name: 'step' }); } });
+        renderTiers();
+
+        /* ═════════ 5. 3D 舞台（換成自己的場景） ═════════ */
+        const stage = document.getElementById('stage');
+        const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); stage.appendChild(renderer.domElement);
+        const scene = new THREE.Scene(); scene.background = new THREE.Color(0x07101f);
+        const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100); camera.position.set(0, 2, 6); camera.lookAt(0, 0.8, 0);
+        scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x0b1220, 0.9)); const sun = new THREE.DirectionalLight(0xffffff, 0.9); sun.position.set(3, 6, 4); scene.add(sun);
+        const cube = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshStandardMaterial({ color: 0x22d3ee, roughness: 0.3, metalness: 0.2, emissive: 0x062a33 }));
+        cube.position.y = 0.8; scene.add(cube);
+        const floor = new THREE.Mesh(new THREE.CircleGeometry(4, 48), new THREE.MeshStandardMaterial({ color: 0x0f2a44 })); floor.rotation.x = -Math.PI / 2; scene.add(floor);
+        let vy = 0, spinT = 0, flashT = 0;
+        function bounce(p) { vy = Math.max(vy, 3 * p); }
+        function spin() { spinT = 1; }
+        function flash() { flashT = 1; }
+        function resize() { const r = stage.getBoundingClientRect(); if (!r.width) return; renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+        addEventListener('resize', resize);
+
+        /* ═════════ 6. 主迴圈：主控端模擬 → 有舞台就畫 → 有資訊就更新 ═════════ */
+        let last = performance.now(), shown = 0;
+        (function loop(now) {
+            requestAnimationFrame(loop); const dt = Math.min(0.1, (now - last) / 1000); last = now;
+            if (ds.isAuthority) {
+                vy -= 9 * dt; cube.position.y = Math.max(0.8, cube.position.y + vy * dt); if (cube.position.y <= 0.8) vy = Math.max(0, vy);
+                spinT = Math.max(0, spinT - dt); cube.rotation.y += dt * (0.4 + spinT * 12);
+                flashT = Math.max(0, flashT - dt * 2); cube.material.emissive.setRGB(0.02 + flashT * 0.5, 0.16 + flashT * 0.5, 0.2 + flashT * 0.4);
+            }
+            if (ds.hasStage) renderer.render(scene, camera);
+            if (ds.hasInfo) {
+                document.getElementById('score').textContent = G.score;
+                if (G.toast.seq !== shown) { shown = G.toast.seq; document.getElementById('toast').textContent = G.toast.msg; }
+            }
+        })(last);
+        resize();
+    </script>
+</body>
+</html>

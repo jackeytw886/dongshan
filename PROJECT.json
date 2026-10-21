@@ -6,7 +6,9 @@
   "category": "install",
   "topics": [
     "audio",
-    "guided-tour"
+    "guided-tour",
+    "motion-sensing",
+    "3d-game"
   ],
   "repository_full_name": "jackeytw886/dongshan",
   "repository_url": "https://github.com/jackeytw886/dongshan",
@@ -21,7 +23,8 @@
   "deployment_url": "https://jackeytw886.github.io/dongshan",
   "event_year": null,
   "entry_paths": [
-    "index.html"
+    "index.html",
+    "motion-games/index.html"
   ],
   "related_project_ids": [],
   "handoff_path": "HANDOFF.md",

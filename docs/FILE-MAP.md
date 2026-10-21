@@ -98,3 +98,20 @@ README.md、AGENTS.md、HANDOFF.md、PROJECT.json、CLAUDE.md、GEMINI.md、.git
 | 1182–1217 | 音訊物件 `audioTTS`、`audioBGM` 與選單卡片 |
 | 1218–1351 | 播放控制：`preloadAndPlay()`、`loadScene()`（語音路徑在這裡）、播放／暫停／上下幕 |
 | 1352–1373 | 燈板動畫迴圈 |
+
+## motion-games/（2026-10-21 新增）
+
+| 路徑 | 大小（bytes） | 類型 |
+| --- | ---: | --- |
+| [motion-games/index.html](../motion-games/index.html) | 4161 | html，入口頁 |
+| [motion-games/3d-09-dragon-lion.html](../motion-games/3d-09-dragon-lion.html) | 約 105,000 | html，舞龍舞獅遊戲 |
+| [motion-games/3d-10-slow-jog.html](../motion-games/3d-10-slow-jog.html) | 約 180,000 | html，超慢跑遊戲 |
+| [motion-games/motion-lab.html](../motion-games/motion-lab.html) | 約 15,600 | html，體感測試台 |
+| [motion-games/game-template.html](../motion-games/game-template.html) | 約 10,000 | html，新遊戲範本 |
+| [motion-games/motion-kit.js](../motion-games/motion-kit.js) | 約 92,000 | js，MotionKit v2 |
+| [motion-games/dual-screen-kit.js](../motion-games/dual-screen-kit.js) | 約 35,500 | js，DualScreenKit v1 |
+| [motion-games/ui-icons.js](../motion-games/ui-icons.js) | 約 8,500 | js，線條圖示 |
+| [motion-games/docs/](../motion-games/docs/) | — | 兩份模組規格 |
+| [motion-games/tests/](../motion-games/tests/) | — | 單元測試與瀏覽器煙霧測試 |
+
+`3d-10-slow-jog.html` 檔內結構：`<style>` 與 HTML 約前 300 行；之後依序為 1 題庫 `STAGE_CONFIGS`、2 狀態 `state`、3 音效、4 3D 世界與 6 大舞台、5 創意拱門、6 角色、7 粒子、8 雙視窗同步、9 選擇中心、10 玩法、11 AI 鏡頭與動作對應、12 主迴圈、13 `renderAll()`、14 按鈕與鍵盤。`3d-09-dragon-lion.html` 依 1 音效、2 狀態、3 渲染與夜空、4 舞台、5 金龍、6 瑞獅、7 光棒、8 煙火、9 遊戲動作與 `ACTIONS` 對應表、10 雙視窗、11 MotionKit、12 輸入、13 資訊更新、14 主迴圈排列，各節以 `/****` 註解標題分隔。
